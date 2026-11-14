@@ -93,7 +93,25 @@ export const api = {
   models: () =>
     request<{ data: ModelRow[] }>('/v1/models', {
       headers: { Authorization: `Bearer ${localStorage.getItem('sh.devkey') ?? ''}` }
-    })
+    }),
+
+  policies: () => request<PolicyRow[]>('/api/admin/policies'),
+  publishPolicy: (body: PublishPolicyBody) =>
+    request<{ version: number; snapshot_reloaded: boolean }>('/api/admin/policies', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+  budgets: () => request<BudgetRow[]>('/api/admin/budgets'),
+  upsertBudget: (body: UpsertBudgetBody) =>
+    request<{ id: string }>('/api/admin/budgets', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+  catalogSync: () =>
+    request<{ ok: boolean; providers: number; models: number; error?: string | null }>(
+      '/api/admin/catalog/sync',
+      { method: 'POST' }
+    )
 };
 
 export interface ProviderRow {
@@ -180,4 +198,50 @@ export interface ModelRow {
     billing: string;
     context_window: number;
   };
+}
+
+export interface PolicyRow {
+  policy_key: string;
+  enabled: boolean;
+  active_version: number | null;
+  versions: Array<{
+    version: number;
+    priority: number;
+    whenJson: string;
+    thenJson: string;
+    onError: string;
+    createdAt: string;
+  }>;
+}
+
+export interface PublishPolicyBody {
+  policyKey: string;
+  priority: number;
+  scope?: { teams?: string[]; apps?: string[]; models?: string[] };
+  when?: { any?: Array<{ detector: string; minMatches: number }> };
+  then?: { action: string; reason: string; ruleId?: string };
+  onError?: string;
+  rolloutPercent?: number;
+  changeReason?: string;
+}
+
+export interface BudgetRow {
+  id: string;
+  subject: string;
+  subjectId?: string | null;
+  period: string;
+  tokenLimit?: number | null;
+  costLimit?: number | null;
+  tokensUsed: number;
+  costUsed: number;
+  enabled: boolean;
+}
+
+export interface UpsertBudgetBody {
+  subject: number;
+  subjectId?: string | null;
+  period: string;
+  tokenLimit?: number | null;
+  costLimit?: number | null;
+  enabled: boolean;
 }

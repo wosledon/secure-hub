@@ -26,7 +26,7 @@ import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import { useTranslation } from 'react-i18next';
-import { api, type AuditRow, type KeyRow, type ProviderRow, type UsageRow } from '../api';
+import { api, type AuditRow, type BudgetRow, type KeyRow, type PolicyRow, type ProviderRow, type UsageRow } from '../api';
 
 export default function AdminPage() {
   const { t } = useTranslation();
@@ -39,18 +39,197 @@ export default function AdminPage() {
         <Typography color="text.secondary">{t('admin.overviewHint')}</Typography>
       </Box>
 
-      <Tabs value={tab} onChange={(_, value) => setTab(value)}>
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable">
         <Tab label={t('nav.overview')} />
         <Tab label={t('nav.providers')} />
         <Tab label={t('nav.keys')} />
         <Tab label={t('nav.audit')} />
+        <Tab label="策略" />
+        <Tab label="预算" />
       </Tabs>
 
       {tab === 0 && <OverviewTab />}
       {tab === 1 && <ProvidersTab />}
       {tab === 2 && <KeysTab />}
       {tab === 3 && <AuditTab />}
+      {tab === 4 && <PoliciesTab />}
+      {tab === 5 && <BudgetsTab />}
     </Stack>
+  );
+}
+
+function PoliciesTab() {
+  const [rows, setRows] = useState<PolicyRow[]>([]);
+  const [policyKey, setPolicyKey] = useState('pol-pii-block');
+  const [detector, setDetector] = useState('pii.cn_idcard');
+  const [action, setAction] = useState('block');
+  const [message, setMessage] = useState<string | null>(null);
+
+  const load = useCallback(async () => setRows(await api.policies()), []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const publish = async () => {
+    try {
+      const result = await api.publishPolicy({
+        policyKey,
+        priority: 100,
+        scope: { teams: [], apps: [], models: [] },
+        when: { any: [{ detector, minMatches: 1 }] },
+        then: { action, reason: detector, ruleId: detector },
+        onError: 'block',
+        rolloutPercent: 100,
+        changeReason: 'ui'
+      });
+      setMessage(`v${result.version} 已发布，快照重载=${result.snapshot_reloaded}`);
+      await load();
+    } catch (err) {
+      setMessage(String(err));
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h2" mb={2}>
+          安全策略
+        </Typography>
+
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mb={2}>
+          <TextField label="policyKey" value={policyKey} onChange={(e) => setPolicyKey(e.target.value)} size="small" />
+          <TextField label="detector" value={detector} onChange={(e) => setDetector(e.target.value)} size="small" />
+          <TextField select label="action" value={action} onChange={(e) => setAction(e.target.value)} size="small" sx={{ minWidth: 140 }}>
+            <MenuItem value="block">block</MenuItem>
+            <MenuItem value="redact">redact</MenuItem>
+            <MenuItem value="alert">alert</MenuItem>
+          </TextField>
+          <Button variant="contained" onClick={() => void publish()}>
+            发布新版本
+          </Button>
+        </Stack>
+
+        {message && <Alert severity="info" sx={{ mb: 2 }}>{message}</Alert>}
+
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>policy</TableCell>
+              <TableCell>active</TableCell>
+              <TableCell>priority</TableCell>
+              <TableCell>when</TableCell>
+              <TableCell>then</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((row) => {
+              const active = row.versions.find((v) => v.version === row.active_version);
+              return (
+                <TableRow key={row.policy_key}>
+                  <TableCell>{row.policy_key}</TableCell>
+                  <TableCell>v{row.active_version ?? '-'}</TableCell>
+                  <TableCell>{active?.priority ?? '-'}</TableCell>
+                  <TableCell sx={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {active?.whenJson ?? '-'}
+                  </TableCell>
+                  <TableCell>{active?.thenJson ?? '-'}</TableCell>
+                </TableRow>
+              );
+            })}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5}>暂无策略</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BudgetsTab() {
+  const [rows, setRows] = useState<BudgetRow[]>([]);
+  const [tokenLimit, setTokenLimit] = useState('1000000');
+  const [period, setPeriod] = useState('month');
+  const [message, setMessage] = useState<string | null>(null);
+
+  const load = useCallback(async () => setRows(await api.budgets()), []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const save = async () => {
+    try {
+      await api.upsertBudget({
+        subject: 0,
+        subjectId: null,
+        period,
+        tokenLimit: Number(tokenLimit),
+        costLimit: null,
+        enabled: true
+      });
+      setMessage('已保存');
+      await load();
+    } catch (err) {
+      setMessage(String(err));
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h2" mb={2}>
+          预算与配额
+        </Typography>
+
+        <Stack direction="row" spacing={2} mb={2}>
+          <TextField label="token 上限" value={tokenLimit} onChange={(e) => setTokenLimit(e.target.value)} size="small" />
+          <TextField select label="周期" value={period} onChange={(e) => setPeriod(e.target.value)} size="small" sx={{ minWidth: 140 }}>
+            <MenuItem value="day">day</MenuItem>
+            <MenuItem value="week">week</MenuItem>
+            <MenuItem value="month">month</MenuItem>
+          </TextField>
+          <Button variant="contained" onClick={() => void save()}>
+            保存
+          </Button>
+        </Stack>
+
+        {message && <Alert severity="info" sx={{ mb: 2 }}>{message}</Alert>}
+
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>subject</TableCell>
+              <TableCell>period</TableCell>
+              <TableCell>tokens</TableCell>
+              <TableCell>cost</TableCell>
+              <TableCell>enabled</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{row.subject}</TableCell>
+                <TableCell>{row.period}</TableCell>
+                <TableCell>
+                  {row.tokensUsed.toLocaleString()} / {row.tokenLimit?.toLocaleString() ?? '∞'}
+                </TableCell>
+                <TableCell>
+                  {row.costUsed.toFixed(2)} / {row.costLimit ?? '∞'}
+                </TableCell>
+                <TableCell>{row.enabled ? 'on' : 'off'}</TableCell>
+              </TableRow>
+            ))}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5}>暂无预算</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -30,6 +30,7 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import InsightsIcon from '@mui/icons-material/Insights';
 import PaidIcon from '@mui/icons-material/Paid';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import RouteIcon from '@mui/icons-material/Route';
@@ -58,6 +59,7 @@ const UsagePage = lazy(() => import('./pages/UsagePage'));
 const AuditPage = lazy(() => import('./pages/AuditPage'));
 const OrganizationPage = lazy(() => import('./pages/OrganizationPage'));
 const EntitlementsPage = lazy(() => import('./pages/EntitlementsPage'));
+const ObservabilityPage = lazy(() => import('./pages/ObservabilityPage'));
 const AssistantWorkspace = lazy(() => import('./pages/AssistantWorkspace'));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
 
@@ -100,6 +102,7 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
     { path: '/keys', label: t('nav.keys'), icon: <KeyIcon />, admin: true },
     { path: '/policies', label: t('nav.policies'), icon: <SecurityIcon />, admin: true },
     { path: '/usage', label: t('nav.budgets'), icon: <PaidIcon />, admin: true },
+    { path: '/observability', label: t('nav.observability'), icon: <InsightsIcon />, admin: true },
     { path: '/audit', label: t('nav.audit'), icon: <ShieldOutlinedIcon />, admin: true }
   ];
   const personalItems: NavItem[] = [
@@ -265,6 +268,7 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
             <Route path="/keys" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <KeysPage />} />
             <Route path="/policies" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <PoliciesPage />} />
             <Route path="/usage" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <UsagePage />} />
+            <Route path="/observability" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <ObservabilityPage />} />
             <Route path="/audit" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <AuditPage />} />
             <Route path="/workspace" element={<WorkspacePage />} />
             <Route path="/assistant" element={<AssistantWorkspace />} />

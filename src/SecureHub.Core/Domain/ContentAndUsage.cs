@@ -75,5 +75,7 @@ public sealed class UsageEvent
     public int OutputTokens { get; set; }
     public decimal CostUsd { get; set; }
     public bool Estimated { get; set; }
+    public int DurationMs { get; set; }
+    public string? ErrorCode { get; set; }
     public string? RequestId { get; set; }
 }

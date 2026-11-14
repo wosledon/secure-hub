@@ -1005,6 +1005,13 @@ namespace SecureHub.Data.Migrations.Postgres
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
 
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("Estimated")
                         .HasColumnType("boolean");
 

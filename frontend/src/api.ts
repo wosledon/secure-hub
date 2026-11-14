@@ -155,6 +155,7 @@ export const api = {
     ),
   usageBreakdown: (days = 7) => request<UsageBreakdown>(`/api/admin/usage/breakdown?days=${days}`),
   capacity: () => request<CapacityReport>('/api/admin/capacity'),
+  metrics: (days = 7) => request<MetricsReport>(`/api/admin/metrics?days=${days}`),
   disputeAudit: (eventId: string, body: { disputeType: string; note?: string }) =>
     request<{ ok: boolean }>(`/api/admin/audit/${eventId}/dispute`, {
       method: 'POST',
@@ -747,6 +748,24 @@ export interface CapacityReport {
   };
   keys: { total: number; active: number; revoked: number; expired: number };
   redaction_tokens: { total: number; expired: number };
+}
+
+export interface MetricsReport {
+  from: string;
+  days: number;
+  summary: {
+    requests: number;
+    errors: number;
+    success_rate: number;
+    avg_ms: number;
+    p50_ms: number;
+    p95_ms: number;
+    p99_ms: number;
+  };
+  security: Array<{ event_type: string; count: number }>;
+  by_model: Array<{ model: string; requests: number; errors: number; avg_ms: number; p95_ms: number }>;
+  by_provider: Array<{ provider_id?: string | null; provider: string; requests: number; errors: number; avg_ms: number; p95_ms: number }>;
+  by_hour: Array<{ hour: number; requests: number; errors: number }>;
 }
 
 export interface PolicyRow {

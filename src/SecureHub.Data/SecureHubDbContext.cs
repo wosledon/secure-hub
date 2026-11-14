@@ -204,6 +204,7 @@ public class SecureHubDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Model).HasMaxLength(200).IsRequired();
             e.Property(x => x.UpstreamModel).HasMaxLength(200);
+            e.Property(x => x.ErrorCode).HasMaxLength(64);
             e.Property(x => x.CostUsd).HasPrecision(18, 6);
             e.HasIndex(x => x.OccurredAt);
             e.HasIndex(x => new { x.AppId, x.OccurredAt });

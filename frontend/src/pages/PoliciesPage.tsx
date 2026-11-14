@@ -13,20 +13,24 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Stack,
+  Switch,
   TextField,
   Tooltip,
   Typography
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import DownloadIcon from '@mui/icons-material/Download';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PolicyIcon from '@mui/icons-material/Policy';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import RestoreIcon from '@mui/icons-material/Restore';
 import ScienceIcon from '@mui/icons-material/Science';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useTranslation } from 'react-i18next';
 import { api, type PolicyDryRunResult, type PolicyRow, type PolicySnapshot, type PublishPolicyBody } from '../api';
 import { CodeBlock, ConfirmDialog, EmptyState, ErrorState, PageHeader, StatusChip, TableSkeleton } from '../components/ui';
@@ -50,6 +54,11 @@ export default function PoliciesPage() {
   const [snapshot, setSnapshot] = useState<PolicySnapshot | null>(null);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [activateTarget, setActivateTarget] = useState<{ policyKey: string; version: number } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const [observation, setObservation] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,7 +70,7 @@ export default function PoliciesPage() {
   const body = (): PublishPolicyBody => ({
     policyKey: form.policyKey.trim(), priority: form.priority, scope: { teams: [], apps: [], models: [] },
     when: { any: [{ detector: form.detector.trim(), minMatches: 1 }] },
-    then: { action: form.action, reason: form.detector.trim(), ruleId: form.detector.trim() },
+    then: { action: observation ? 'alert' : form.action, reason: form.detector.trim(), ruleId: form.detector.trim() },
     onError: form.onError, rolloutPercent: form.rollout, changeReason: form.changeReason.trim()
   });
 
@@ -90,8 +99,46 @@ export default function PoliciesPage() {
     } catch (err) { setError((err as Error).message); }
   };
 
-  const activate = async () => {
-    if (!activateTarget) return;
+  const exportPolicies = () => {
+    const bodies = rows.flatMap((row) => row.versions
+      .filter((version) => version.version === row.active_version)
+      .map((version) => ({
+        policyKey: row.policy_key,
+        priority: version.priority,
+        scope: safeParse(version.scopeJson),
+        when: safeParse(version.whenJson),
+        then: safeParse(version.thenJson),
+        onError: version.onError,
+        rolloutPercent: 100,
+        changeReason: 'exported'
+      })));
+    const blob = new Blob([JSON.stringify(bodies, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `securehub-policies-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importPolicies = async () => {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const parsed = JSON.parse(importText) as PublishPolicyBody[];
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error(t('policies.importEmpty'));
+      let ok = 0;
+      const failures: string[] = [];
+      for (const body of parsed) {
+        try { await api.publishPolicy(body); ok++; }
+        catch (err) { failures.push(`${body.policyKey}: ${(err as Error).message}`); }
+      }
+      setImportResult(t('policies.importResult', { ok, failed: failures.length }) + (failures.length ? `\n${failures.join('\n')}` : ''));
+      await load();
+    } catch (err) { setImportResult((err as Error).message); } finally { setImporting(false); }
+  };
+
+  const activate = async () => {    if (!activateTarget) return;
     setBusy('activate');
     try {
       await api.activatePolicy(activateTarget.policyKey, activateTarget.version);
@@ -106,7 +153,9 @@ export default function PoliciesPage() {
       <PageHeader title={t('policies.title')} description={t('policies.description')} actions={<>
         <Tooltip title={t('common.refresh')}><IconButton onClick={() => void load()} aria-label={t('common.refresh')}><RefreshIcon /></IconButton></Tooltip>
         <Button variant="outlined" startIcon={<PolicyIcon />} onClick={() => void showSnapshot()}>{t('policies.snapshot')}</Button>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setOpen(true); setMessage(null); }}>{t('policies.publish')}</Button>
+        <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportPolicies} disabled={rows.length === 0}>{t('policies.export')}</Button>
+        <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => { setImportOpen(true); setImportResult(null); }}>{t('policies.import')}</Button>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setOpen(true); setMessage(null); setObservation(false); }}>{t('policies.publish')}</Button>
       </>} />
       {error && <ErrorState message={error} retry={() => void load()} />}
       {message && <Alert severity="success" onClose={() => setMessage(null)}>{message}</Alert>}
@@ -163,7 +212,7 @@ export default function PoliciesPage() {
           <TextField label={t('policies.policyKey')} value={form.policyKey} onChange={(event) => setForm({ ...form, policyKey: event.target.value })} name="policyKey" autoComplete="off" required />
           <TextField label={t('policies.detector')} value={form.detector} onChange={(event) => setForm({ ...form, detector: event.target.value })} helperText="pii.cn_idcard · pii.cn_phone · pii.email · secret.jwt · secret.high_entropy" name="detector" autoComplete="off" required />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField select fullWidth label={t('policies.action')} value={form.action} onChange={(event) => setForm({ ...form, action: event.target.value })}><MenuItem value="block">{t('policies.block')}</MenuItem><MenuItem value="redact">{t('policies.redact')}</MenuItem><MenuItem value="alert">{t('policies.alert')}</MenuItem></TextField>
+            <TextField select fullWidth label={t('policies.action')} value={form.action} onChange={(event) => setForm({ ...form, action: event.target.value })} disabled={observation}><MenuItem value="block">{t('policies.block')}</MenuItem><MenuItem value="redact">{t('policies.redact')}</MenuItem><MenuItem value="alert">{t('policies.alert')}</MenuItem></TextField>
             <TextField select fullWidth label={t('policies.onError')} value={form.onError} onChange={(event) => setForm({ ...form, onError: event.target.value })}><MenuItem value="block">block</MenuItem><MenuItem value="allow">allow</MenuItem></TextField>
           </Stack>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -171,6 +220,8 @@ export default function PoliciesPage() {
             <TextField fullWidth type="number" label={t('policies.rollout')} value={form.rollout} onChange={(event) => setForm({ ...form, rollout: Number(event.target.value) })} inputProps={{ min: 0, max: 100 }} />
           </Stack>
           <TextField label={t('policies.changeReason')} value={form.changeReason} onChange={(event) => setForm({ ...form, changeReason: event.target.value })} name="changeReason" autoComplete="off" />
+          <FormControlLabel control={<Switch checked={observation} onChange={(event) => setObservation(event.target.checked)} />} label={t('policies.observation')} />
+          {observation && <Alert severity="info">{t('policies.observationHint')}</Alert>}
           {dryRun && <Alert severity="warning" icon={<ScienceIcon />}><Typography variant="subtitle2" mb={1}>{t('policies.dryRunTitle')}</Typography><Typography variant="body2">{t('policies.sampled')}: {format.number(dryRun.sampled_events)} · {t('policies.affected')}: {format.number(dryRun.estimated_affected)}</Typography><Typography variant="caption" display="block" mt={0.5}>{t('policies.confidence')}: {dryRun.confidence} · {dryRun.note}</Typography></Alert>}
           {formError && <Alert severity="error">{formError}</Alert>}
         </Stack></DialogContent>
@@ -178,6 +229,26 @@ export default function PoliciesPage() {
       </Dialog>
       <Dialog open={snapshotOpen} onClose={() => setSnapshotOpen(false)} fullWidth maxWidth="md"><DialogTitle>{t('policies.snapshot')}</DialogTitle><DialogContent><Stack spacing={2} mt={1}>{snapshot?.error && <Alert severity="error">{snapshot.error}</Alert>}<Alert severity={snapshot?.count ? 'success' : 'info'}>{snapshot?.count ? t('policies.snapshotOk') : t('policies.snapshotEmpty')} · {t('policies.snapshotCount', { count: snapshot?.count ?? 0 })}</Alert><CodeBlock code={JSON.stringify(snapshot?.policies ?? [], null, 2)} label="Compiled policy snapshot" /></Stack></DialogContent><DialogActions><Button onClick={() => setSnapshotOpen(false)}>{t('common.close')}</Button></DialogActions></Dialog>
       <ConfirmDialog open={!!activateTarget} title={t('policies.activateTitle', { version: activateTarget?.version ?? '' })} description={t('policies.activateHint')} confirmLabel={t('policies.activate')} busy={busy === 'activate'} onClose={() => setActivateTarget(null)} onConfirm={() => void activate()} />
+
+      <Dialog open={importOpen} onClose={importing ? undefined : () => setImportOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>{t('policies.import')}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} mt={1}>
+            <Alert severity="info">{t('policies.importHint')}</Alert>
+            <TextField multiline minRows={10} label="JSON" value={importText} onChange={(event) => setImportText(event.target.value)} autoComplete="off" sx={{ '& textarea': { fontFamily: 'monospace', fontSize: 12 } }} />
+            {importResult && <Alert severity={importResult.includes(t('policies.importFailedMarker')) ? 'warning' : 'success'} sx={{ whiteSpace: 'pre-wrap' }}>{importResult}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportOpen(false)} disabled={importing}>{t('common.close')}</Button>
+          <Button variant="contained" onClick={() => void importPolicies()} disabled={importing || !importText.trim()}>{importing ? t('common.working') : t('policies.import')}</Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
+}
+
+function safeParse(json?: string): any {
+  try { return json ? JSON.parse(json) : {}; }
+  catch { return {}; }
 }

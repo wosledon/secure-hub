@@ -108,6 +108,7 @@ app.MapEntitlements();
 app.MapKeyConstraints();
 app.MapAuditDeep();
 app.MapUsageInsights();
+app.MapMetrics();
 
 // SPA 回退：/admin、/me 等前端路由返回 index.html；
 // /api 与 /v1 下的未知路径保持 404，避免把 JSON 调用者导到 HTML。

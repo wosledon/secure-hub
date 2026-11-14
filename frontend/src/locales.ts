@@ -4,7 +4,7 @@ export const zhCN = {
     admin: '管理端', me: '我的工作台', workspace: '个人工作台', assistant: '审计助手',
     overview: '总览', providers: '供应商', catalog: '模型目录', routing: '模型路由',
     keys: '虚拟密钥', policies: '安全策略', budgets: '用量与预算', audit: '审计日志',
-    organization: '组织管理', entitlements: '访问授权',
+    organization: '组织管理', entitlements: '访问授权', observability: '可观测性',
     models: '可用模型', logout: '退出登录', management: '企业管理', personal: '个人空间',
     account: '账号与安全', main: '主导航', open: '打开导航', close: '关闭导航'
   },
@@ -91,7 +91,10 @@ export const zhCN = {
     dryRunTitle: '试运行结果', sampled: '采样事件', affected: '预计影响', confidence: '置信度',
     activate: '激活此版本', activateTitle: '激活版本 v{{version}}？', activateHint: '激活后，网关会立即重载策略快照。',
     published: '策略 v{{version}} 已发布', activated: '已激活策略 v{{version}}', snapshotCount: '{{count}} 条编译策略',
-    snapshotOk: '策略快照已加载', snapshotEmpty: '当前没有生效策略', reason: '变更原因'
+    snapshotOk: '策略快照已加载', snapshotEmpty: '当前没有生效策略', reason: '变更原因',
+    export: '导出', import: '导入', importHint: '粘贴策略数组（与导出格式一致）。每条会生成新版本，失败项会单独列出。',
+    importResult: '导入完成：成功 {{ok}} 条，失败 {{failed}} 条', importEmpty: '没有可导入的策略', importFailedMarker: '失败',
+    observation: '观察模式（只记录不阻断）', observationHint: '观察模式会把命中动作降为 alert，只写审计不拦截请求。'
   },
   usage: {
     title: '用量与预算', description: '查看近 7 天模型用量与计费归属，并按日、周、月设置 Token 或成本上限。',
@@ -229,8 +232,7 @@ export const zhCN = {
     catalogSourceNote: '目录来自 models.dev，只包含模型能力、上下文与公开价格；接口地址在目录提供时自动带出。'
   },
   entitlements: {
-    title: '访问授权', description: '把供应商和具体模型分配给全体、团队或个人；配置后按授权严格放行。',
-    add: '新增授权', edit: '编辑授权', listTitle: '授权规则', search: '搜索供应商、主体或模型…',
+    title: '访问授权', description: '把供应商和具体模型分配给全体、团队或个人；配置后按授权严格放行。',    add: '新增授权', edit: '编辑授权', listTitle: '授权规则', search: '搜索供应商、主体或模型…',
     subject: '授权对象', subjectAll: '全体成员', subjectTeam: '团队', subjectUser: '用户',
     expiresAt: '到期时间', never: '永不过期', allModels: '该供应商全部模型', modelsHint: '不选表示该供应商全部模型。',
     unlimitedHint: '留空表示不限制', expiresHint: '留空表示永久有效',
@@ -238,6 +240,15 @@ export const zhCN = {
     empty: '还没有授权规则', emptyHint: '为团队或个人分配模型后，未授权请求会被拒绝。',
     saved: '授权已保存', deleted: '授权已删除',
     deleteTitle: '删除这条授权？', deleteHint: '删除后该主体将失去对应供应商的访问权限，除非仍有其他授权匹配。'
+  },
+  observability: {
+    title: '可观测性', description: '近 7 天数据面请求量、成功率、延迟分位与按模型/供应商分布。',
+    requests: '数据面请求', successRate: '成功率', errors: '错误', p95: 'P95 延迟', p50: 'P50', p99: 'P99',
+    avgLatency: '平均延迟', avgHint: '包含流式请求的头部等待时间',
+    hourly: '按小时分布', hourlyHint: 'UTC 小时；橙色表示该小时存在失败请求',
+    byModel: '按模型延迟', byModelHint: '按请求数排序，展示前 25 个模型',
+    security: '安全拦截', securityHint: '近 7 天护栏、限流与认证失败次数', noBlocks: '近 7 天没有安全拦截',
+    byProvider: '按供应商'
   },
   admin: {
     overviewHint: '企业调用、成本与拦截概览', createProvider: '添加企业供应商', createKey: '签发应用密钥',
@@ -252,7 +263,7 @@ export const en = {
     admin: 'Admin', me: 'My Workspace', workspace: 'My workspace', assistant: 'Audit assistant',
     overview: 'Overview', providers: 'Providers', catalog: 'Model catalog', routing: 'Model routing',
     keys: 'Virtual keys', policies: 'Security policies', budgets: 'Usage & budgets', audit: 'Audit log',
-    organization: 'Organization', entitlements: 'Entitlements',
+    organization: 'Organization', entitlements: 'Entitlements', observability: 'Observability',
     models: 'Available models', logout: 'Sign out', management: 'MANAGEMENT', personal: 'PERSONAL',
     account: 'Account & security', main: 'Main navigation', open: 'Open navigation', close: 'Close navigation'
   },
@@ -339,7 +350,10 @@ export const en = {
     dryRunTitle: 'Dry-run result', sampled: 'Sampled events', affected: 'Estimated affected', confidence: 'Confidence',
     activate: 'Activate version', activateTitle: 'Activate version v{{version}}?', activateHint: 'The gateway will immediately reload its compiled policy snapshot.',
     published: 'Policy v{{version}} published', activated: 'Policy v{{version}} activated', snapshotCount: '{{count}} compiled policies',
-    snapshotOk: 'Policy snapshot loaded', snapshotEmpty: 'No active policies', reason: 'Change reason'
+    snapshotOk: 'Policy snapshot loaded', snapshotEmpty: 'No active policies', reason: 'Change reason',
+    export: 'Export', import: 'Import', importHint: 'Paste an array of policies in the export format. Each entry creates a new version; failures are listed individually.',
+    importResult: 'Import finished: {{ok}} succeeded, {{failed}} failed', importEmpty: 'No policies to import', importFailedMarker: 'failed',
+    observation: 'Observation mode (record only)', observationHint: 'Observation mode downgrades matches to alert: audits are written but requests are not blocked.'
   },
   usage: {
     title: 'Usage & budgets', description: 'Review model usage and billing ownership for the last 7 days. Set daily, weekly, or monthly token and cost limits.',
@@ -487,6 +501,15 @@ export const en = {
     empty: 'No entitlement rules yet', emptyHint: 'Assign models to teams or users to start enforcing access.',
     saved: 'Entitlement saved', deleted: 'Entitlement deleted',
     deleteTitle: 'Delete this entitlement?', deleteHint: 'The subject loses access to this provider unless another matching entitlement remains.'
+  },
+  observability: {
+    title: 'Observability', description: 'Data-plane request volume, success rate, latency percentiles, and model/provider distribution over the last 7 days.',
+    requests: 'Data-plane requests', successRate: 'Success rate', errors: 'Errors', p95: 'P95 latency', p50: 'P50', p99: 'P99',
+    avgLatency: 'Average latency', avgHint: 'Includes time to first byte for streamed requests',
+    hourly: 'Hourly distribution', hourlyHint: 'UTC hours; amber marks an hour with failed requests',
+    byModel: 'Latency by model', byModelHint: 'Top 25 models ordered by requests',
+    security: 'Security blocks', securityHint: 'Guardrail, rate-limit, and auth failures in the last 7 days', noBlocks: 'No security blocks in the last 7 days',
+    byProvider: 'By provider'
   },
   admin: {
     overviewHint: 'Calls, cost, and blocks across the organization', createProvider: 'Add enterprise provider', createKey: 'Issue application key',

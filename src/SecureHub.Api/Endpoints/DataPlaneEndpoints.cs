@@ -317,14 +317,46 @@ public static class DataPlaneEndpoints
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", upstreamKey);
 
         var client = httpClientFactory.CreateClient("upstream");
-        using var upstreamResponse = await client.SendAsync(
-            upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        HttpResponseMessage upstreamResponse;
+        try
+        {
+            upstreamResponse = await client.SendAsync(
+                upstreamRequest, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            stopwatch.Stop();
+            await RecordFailedUsageAsync(db, auth, decision, provider.Id, candidate.UpstreamModel,
+                requestId, rawModel, stopwatch.ElapsedMilliseconds, "upstream_unreachable", ct);
+            await audit.AppendAsync(
+                AuditEventTypes.RouteDenied, "virtualKey", auth.OwnerId.ToString(), auth.Label,
+                ReasonCodes.AllCandidatesFailed, severity: AuditSeverity.Critical,
+                billingOwner: decision.BillingOwner,
+                configure: e =>
+                {
+                    e.RequestId = requestId;
+                    e.ModelAlias = rawModel;
+                    e.ProviderId = provider.Id;
+                    e.UpstreamModel = candidate.UpstreamModel;
+                }, ct: ct);
+            await ApiError.Create(502, ReasonCodes.AllCandidatesFailed, localizer, requestId).ExecuteAsync(http);
+            return;
+        }
+
+        using var _ = upstreamResponse;
 
         http.Response.StatusCode = (int)upstreamResponse.StatusCode;
 
         if (!upstreamResponse.IsSuccessStatusCode)
         {
+            stopwatch.Stop();
             var errorBody = await upstreamResponse.Content.ReadAsStringAsync(ct);
+            var errorCode = upstreamResponse.StatusCode == System.Net.HttpStatusCode.TooManyRequests
+                ? ReasonCodes.UpstreamRateLimited
+                : ReasonCodes.UpstreamTimeout;
+            await RecordFailedUsageAsync(db, auth, decision, provider.Id, candidate.UpstreamModel,
+                requestId, rawModel, stopwatch.ElapsedMilliseconds, errorCode, ct);
             await audit.AppendAsync(
                 AuditEventTypes.RouteDenied, "virtualKey", auth.OwnerId.ToString(), auth.Label,
                 upstreamResponse.StatusCode == System.Net.HttpStatusCode.TooManyRequests
@@ -358,15 +390,17 @@ public static class DataPlaneEndpoints
             await using var stream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
             await stream.CopyToAsync(http.Response.Body, ct);
             await http.Response.Body.FlushAsync(ct);
+            stopwatch.Stop();
 
             await RecordUsageAsync(
                 db, audit, budgets, rateLimiter, auth, decision, provider.Id, candidate.UpstreamModel,
                 requestId, rawModel, originalTokens, EstimateTokens(outboundBody),
-                0, estimated: true, rolledBack, ct);
+                0, estimated: true, rolledBack, (int)Math.Min(int.MaxValue, stopwatch.ElapsedMilliseconds), ct);
             return;
         }
 
         var responseBody = await upstreamResponse.Content.ReadAsStringAsync(ct);
+        stopwatch.Stop();
 
         if (tokenizedCount > 0)
         {
@@ -398,7 +432,7 @@ public static class DataPlaneEndpoints
         await RecordUsageAsync(
             db, audit, budgets, rateLimiter, auth, decision, provider.Id, candidate.UpstreamModel,
             requestId, rawModel, originalTokens, inputTokens,
-            outputTokens, estimated: inputTokens == 0, rolledBack, ct);
+            outputTokens, estimated: inputTokens == 0, rolledBack, (int)Math.Min(int.MaxValue, stopwatch.ElapsedMilliseconds), ct);
     }
 
     private static async Task RecordUsageAsync(
@@ -417,6 +451,7 @@ public static class DataPlaneEndpoints
         int outputTokens,
         bool estimated,
         bool compressionRolledBack,
+        int durationMs,
         CancellationToken ct)
     {
         var offering = await db.ProviderOfferings.AsNoTracking().FirstOrDefaultAsync(
@@ -444,6 +479,7 @@ public static class DataPlaneEndpoints
             OutputTokens = outputTokens,
             CostUsd = cost,
             Estimated = estimated,
+            DurationMs = durationMs,
             RequestId = requestId
         });
 
@@ -472,6 +508,42 @@ public static class DataPlaneEndpoints
                 e.CostUsd = cost;
                 e.Detail = JsonSerializer.Serialize(new { estimated, rolledBack = compressionRolledBack });
             }, ct: ct);
+    }
+
+    private static async Task RecordFailedUsageAsync(
+        SecureHubDbContext db,
+        AuthContext auth,
+        RouteDecision decision,
+        Guid providerId,
+        string upstreamModel,
+        string requestId,
+        string requestedModel,
+        long durationMs,
+        string errorCode,
+        CancellationToken ct)
+    {
+        db.UsageEvents.Add(new UsageEvent
+        {
+            OccurredAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
+            AppId = auth.AppId,
+            TeamId = auth.TeamId,
+            UserId = auth.OwnerType == KeyOwnerType.User ? auth.OwnerId : null,
+            VirtualKeyId = auth.VirtualKeyId,
+            ProviderId = providerId,
+            ModelScope = decision.Model.Scope,
+            BillingOwner = decision.BillingOwner,
+            Model = requestedModel,
+            UpstreamModel = upstreamModel,
+            InputTokens = 0,
+            InputTokensOriginal = 0,
+            OutputTokens = 0,
+            CostUsd = 0m,
+            Estimated = true,
+            DurationMs = (int)Math.Min(int.MaxValue, durationMs),
+            ErrorCode = errorCode,
+            RequestId = requestId
+        });
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task ListModelsAsync(

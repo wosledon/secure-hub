@@ -1000,6 +1000,13 @@ namespace SecureHub.Data.Migrations.Sqlite
                         .HasPrecision(18, 6)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Estimated")
                         .HasColumnType("INTEGER");
 

@@ -27,7 +27,7 @@ import TokenOutlinedIcon from '@mui/icons-material/TokenOutlined';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, type ModelRow, type MyKeyRow, type MyProviderRow, type UsageRow } from '../api';
-import { CodeBlock, CopyButton, EmptyState, ErrorState, PageHeader, SecretDialog, StatCard, StatusChip, TableSkeleton } from '../components/ui';
+import { CodeBlock, CopyButton, ConfirmDialog, EmptyState, ErrorState, PageHeader, SecretDialog, StatCard, StatusChip, TableSkeleton } from '../components/ui';
 import ProviderOnboardingDialog from '../components/ProviderOnboardingDialog';
 import { useFormatters } from '../utils/format';
 
@@ -92,19 +92,37 @@ function MyProviders() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [disableTarget, setDisableTarget] = useState<MyProviderRow | null>(null);
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setRows(await api.myProviders()); } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  const test = async (row: MyProviderRow) => {
+    setBusyId(row.id); setMessage(null);
+    try {
+      const result = await api.testMyProvider(row.id);
+      setMessage(result.healthy ? t('providers.testOk', { name: row.alias }) : t('providers.testFailed', { name: row.alias, error: result.error ?? '' }));
+    } catch (err) { setError((err as Error).message); } finally { setBusyId(null); }
+  };
+  const disable = async () => {
+    if (!disableTarget) return;
+    setBusyId(disableTarget.id);
+    try { await api.disableMyProvider(disableTarget.id); setDisableTarget(null); await load(); }
+    catch (err) { setError((err as Error).message); } finally { setBusyId(null); }
+  };
   return (
     <Stack spacing={3}>
       {error && <ErrorState message={error} retry={() => void load()} />}
+      {message && <Alert severity="info" onClose={() => setMessage(null)}>{message}</Alert>}
       <Alert severity="info">{t('me.personalDisclosure')}</Alert>
       <Card><CardContent sx={{ pb: '16px !important' }}><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'flex-start' }} spacing={2}><Box><Typography variant="h2">{t('me.providers')}</Typography><Typography variant="body2" color="text.secondary" mt={0.5}>{t('me.byokHint')}</Typography></Box><Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>{t('me.createByok')}</Button></Stack></CardContent>
-        {loading ? <TableSkeleton rows={4} columns={4} /> : rows.length === 0 ? <EmptyState title={t('me.providerEmpty')} action={<Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>{t('me.addFirst')}</Button>} /> : <Box sx={{ overflowX: 'auto' }}><Table><TableHead><TableRow><TableCell>{t('common.alias')}</TableCell><TableCell>{t('common.provider')}</TableCell><TableCell>{t('common.baseUrl')}</TableCell><TableCell>{t('common.models')}</TableCell></TableRow></TableHead><TableBody>{rows.map((row) => <TableRow key={row.id} hover><TableCell><Stack direction="row" spacing={1.25} alignItems="center"><Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}><CloudQueueIcon sx={{ fontSize: 17 }} /></Avatar><Typography variant="subtitle2">{row.alias}</Typography></Stack></TableCell><TableCell><Box component="code">{row.providerKey}</Box></TableCell><TableCell sx={{ maxWidth: 300 }}><Typography variant="body2" noWrap>{row.baseUrl}</Typography></TableCell><TableCell><Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>{row.models.map((model) => <Chip key={model} size="small" variant="outlined" label={model} />)}</Stack></TableCell></TableRow>)}</TableBody></Table></Box>}
+        {loading ? <TableSkeleton rows={4} columns={4} /> : rows.length === 0 ? <EmptyState title={t('me.providerEmpty')} action={<Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>{t('me.addFirst')}</Button>} /> : <Box sx={{ overflowX: 'auto' }}><Table><TableHead><TableRow><TableCell>{t('common.alias')}</TableCell><TableCell>{t('common.provider')}</TableCell><TableCell>{t('common.baseUrl')}</TableCell><TableCell>{t('common.models')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead><TableBody>{rows.map((row) => <TableRow key={row.id} hover><TableCell><Stack direction="row" spacing={1.25} alignItems="center"><Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}><CloudQueueIcon sx={{ fontSize: 17 }} /></Avatar><Typography variant="subtitle2">{row.alias}</Typography></Stack></TableCell><TableCell><Box component="code">{row.providerKey}</Box></TableCell><TableCell sx={{ maxWidth: 300 }}><Typography variant="body2" noWrap>{row.baseUrl}</Typography></TableCell><TableCell><Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>{row.models.map((model) => <Chip key={model} size="small" variant="outlined" label={model} />)}</Stack></TableCell><TableCell align="right"><Stack direction="row" spacing={0.5} justifyContent="flex-end"><Button size="small" disabled={busyId === row.id} onClick={() => void test(row)}>{t('me.testProvider')}</Button><Button size="small" color="error" onClick={() => setDisableTarget(row)}>{t('me.disableProvider')}</Button></Stack></TableCell></TableRow>)}</TableBody></Table></Box>}
       </Card>
       <ProviderOnboardingDialog open={open} scope="me" onClose={() => setOpen(false)} onCreated={() => void load()} />
+      <ConfirmDialog open={!!disableTarget} title={t('providers.disableTitle')} description={t('providers.disableHint', { name: disableTarget?.alias ?? '' })} confirmLabel={t('me.disableProvider')} busy={!!busyId} danger onClose={() => setDisableTarget(null)} onConfirm={() => void disable()} />
     </Stack>
   );
 }
@@ -117,6 +135,8 @@ function MyKeys() {
   const [creating, setCreating] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<MyKeyRow | null>(null);
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try { setRows(await api.myKeys()); } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
@@ -126,11 +146,27 @@ function MyKeys() {
     setCreating(true); setError(null);
     try { const result = await api.createMyKey(); localStorage.setItem(DEVKEY_STORAGE, result.key); setSecret(result.key); await load(); } catch (err) { setError((err as Error).message); } finally { setCreating(false); }
   };
+  const rotate = async (row: MyKeyRow) => {
+    setBusyId(row.id); setError(null);
+    try {
+      const result = await api.rotateMyKey(row.id);
+      localStorage.setItem(DEVKEY_STORAGE, result.key);
+      setSecret(result.key);
+      await load();
+    } catch (err) { setError((err as Error).message); } finally { setBusyId(null); }
+  };
+  const revoke = async () => {
+    if (!revokeTarget) return;
+    setBusyId(revokeTarget.id);
+    try { await api.revokeMyKey(revokeTarget.id); setRevokeTarget(null); await load(); }
+    catch (err) { setError((err as Error).message); } finally { setBusyId(null); }
+  };
   return (
     <Stack spacing={3}>{error && <ErrorState message={error} retry={() => void load()} />}
       <Card><CardContent sx={{ pb: '16px !important' }}><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'flex-start' }} spacing={2}><Box><Typography variant="h2">{t('me.keys')}</Typography><Typography variant="body2" color="text.secondary" mt={0.5}>{t('keys.description')}</Typography></Box><Button variant="contained" startIcon={<KeyIcon />} onClick={() => void create()} disabled={creating}>{creating ? t('common.working') : t('me.createMyKey')}</Button></Stack></CardContent>
-        {loading ? <TableSkeleton rows={4} columns={4} /> : rows.length === 0 ? <EmptyState title={t('me.keyEmpty')} action={<Button variant="contained" startIcon={<KeyIcon />} onClick={() => void create()}>{t('me.createFirst')}</Button>} /> : <Box sx={{ overflowX: 'auto' }}><Table><TableHead><TableRow><TableCell>{t('common.name')}</TableCell><TableCell>{t('keys.keyId')}</TableCell><TableCell>{t('keys.prefix')}</TableCell><TableCell>{t('common.createdAt')}</TableCell><TableCell>{t('common.status')}</TableCell></TableRow></TableHead><TableBody>{rows.map((row) => <TableRow key={row.id} hover><TableCell><Typography variant="subtitle2">{row.display_name}</Typography></TableCell><TableCell><Box component="code">{row.key_id}</Box></TableCell><TableCell><Box component="code" fontSize={12}>{row.prefix}••••••••</Box></TableCell><TableCell>{format.dateTime(row.created_at)}</TableCell><TableCell><StatusChip status={row.is_revoked ? 'revoked' : 'active'} label={row.is_revoked ? t('common.revoked') : t('common.active')} /></TableCell></TableRow>)}</TableBody></Table></Box>}
+        {loading ? <TableSkeleton rows={4} columns={4} /> : rows.length === 0 ? <EmptyState title={t('me.keyEmpty')} action={<Button variant="contained" startIcon={<KeyIcon />} onClick={() => void create()}>{t('me.createFirst')}</Button>} /> : <Box sx={{ overflowX: 'auto' }}><Table>        <TableHead><TableRow><TableCell>{t('common.name')}</TableCell><TableCell>{t('keys.keyId')}</TableCell><TableCell>{t('keys.prefix')}</TableCell><TableCell>{t('common.createdAt')}</TableCell><TableCell>{t('common.status')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead><TableBody>{rows.map((row) => <TableRow key={row.id} hover sx={{ opacity: row.is_revoked ? 0.65 : 1 }}><TableCell><Typography variant="subtitle2">{row.display_name}</Typography></TableCell><TableCell><Box component="code">{row.key_id}</Box></TableCell><TableCell><Box component="code" fontSize={12}>{row.prefix}••••••••</Box></TableCell><TableCell>{format.dateTime(row.created_at)}</TableCell><TableCell><StatusChip status={row.is_revoked ? 'revoked' : 'active'} label={row.is_revoked ? t('common.revoked') : t('common.active')} /></TableCell><TableCell align="right"><Stack direction="row" spacing={0.5} justifyContent="flex-end"><Button size="small" disabled={row.is_revoked || busyId === row.id} onClick={() => void rotate(row)}>{t('me.rotateKey')}</Button><Button size="small" color="error" disabled={row.is_revoked} onClick={() => setRevokeTarget(row)}>{t('me.revokeKey')}</Button></Stack></TableCell></TableRow>)}</TableBody></Table></Box>}
       </Card><QuickStart /><SecretDialog open={!!secret} secret={secret ?? ''} onClose={() => setSecret(null)} />
+              <ConfirmDialog open={!!revokeTarget} title={t('me.revokeKey')} description={t('me.revokeKeyHint', { name: revokeTarget?.display_name ?? '' })} confirmLabel={t('me.revokeKey')} busy={!!busyId} danger onClose={() => setRevokeTarget(null)} onConfirm={() => void revoke()} />
     </Stack>
   );
 }

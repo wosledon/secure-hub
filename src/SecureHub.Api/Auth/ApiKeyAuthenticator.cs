@@ -13,7 +13,8 @@ public sealed record AuthContext(
     string Label,
     Guid? AppId,
     Guid? TeamId,
-    BillingOwner Billing);
+    BillingOwner Billing,
+    KeyConstraints Constraints);
 
 /// <summary>虚拟密钥校验（security.md §4.1）：语法 → 存在性 → 哈希 → 状态，失败原因不外泄。</summary>
 public sealed class ApiKeyAuthenticator(SecureHubDbContext db, IClock clock)
@@ -47,13 +48,15 @@ public sealed class ApiKeyAuthenticator(SecureHubDbContext db, IClock clock)
             if (app is null) return (null, ReasonCodes.InvalidApiKey);
 
             return (new AuthContext(
-                key.Id, key.OwnerType, key.OwnerId, app.Name, app.Id, app.TeamId, BillingOwner.Org), null);
+                key.Id, key.OwnerType, key.OwnerId, app.Name, app.Id, app.TeamId, BillingOwner.Org,
+                KeyConstraints.Parse(key.ConstraintsJson)), null);
         }
 
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == key.OwnerId, ct);
         if (user is null || !user.IsActive) return (null, ReasonCodes.InvalidApiKey);
 
         return (new AuthContext(
-            key.Id, key.OwnerType, key.OwnerId, user.UserName, null, user.TeamId, BillingOwner.Org), null);
+            key.Id, key.OwnerType, key.OwnerId, user.UserName, null, user.TeamId, BillingOwner.Org,
+            KeyConstraints.Parse(key.ConstraintsJson)), null);
     }
 }

@@ -4,7 +4,7 @@ export const zhCN = {
     admin: '管理端', me: '我的工作台', workspace: '个人工作台', assistant: '审计助手',
     overview: '总览', providers: '供应商', catalog: '模型目录', routing: '模型路由',
     keys: '虚拟密钥', policies: '安全策略', budgets: '用量与预算', audit: '审计日志',
-    organization: '组织管理',
+    organization: '组织管理', entitlements: '访问授权',
     models: '可用模型', logout: '退出登录', management: '企业管理', personal: '个人空间',
     account: '账号与安全', main: '主导航', open: '打开导航', close: '关闭导航'
   },
@@ -44,7 +44,13 @@ export const zhCN = {
     createTitle: '接入企业供应商', createHint: '保存后可通过 org/<别名>/<模型> 调用。',
     presetCustom: '自定义 OpenAI 兼容接口', selectPreset: '供应商类型', apiKeyHint: '仅用于加密保存，创建后无法在控制台查看。',
     modelsHint: '使用英文逗号分隔，例如 gpt-4o, gpt-4o-mini', aliasHint: '全局唯一，将出现在完整模型 ID 中。',
-    created: '供应商已接入', baseUrlHint: '需包含 /v1，例如 https://api.openai.com/v1'
+    created: '供应商已接入', baseUrlHint: '需包含 /v1，例如 https://api.openai.com/v1',
+    test: '测试连接', testOk: '{{name}} 连接正常', testFailed: '{{name}} 连接失败：{{error}}',
+    editTitle: '编辑供应商 · {{name}}', updated: '供应商 {{name}} 已更新',
+    rotate: '轮换凭据', rotateTitle: '轮换凭据 · {{name}}', rotateHint: '保存后旧凭据立即停用，新凭据加密保存。',
+    rotated: '供应商 {{name}} 的凭据已轮换',
+    disable: '停用供应商', disableTitle: '确认停用该供应商？', disableHint: '停用 {{name}} 后，其模型将立即从路由和 /v1/models 中移除。',
+    disabled: '供应商 {{name}} 已停用'
   },
   catalog: {
     title: '模型目录', description: '检索 models.dev 同步的模型能力、上下文窗口与价格，为接入和路由提供依据。',
@@ -68,7 +74,12 @@ export const zhCN = {
     organization: '企业应用', user: '个人用户', scopes: '权限范围', displayNameHint: '例如：生产环境客服机器人',
     createTitle: '签发应用密钥', createHint: '默认授予 chat:write 与 models:read。', revoke: '吊销密钥',
     revokeTitle: '确认吊销这个密钥？', revokeHint: '使用“{{name}}”的应用将立即无法访问网关。此操作不可撤销。',
-    revokedSuccess: '密钥已吊销', integration: '快速接入', integrationHint: '使用完整模型 ID，将请求发送到本网关。'
+    revokedSuccess: '密钥已吊销', integration: '快速接入', integrationHint: '使用完整模型 ID，将请求发送到本网关。',
+    constraints: '约束', constraintsTitle: '访问约束 · {{name}}',
+    constraintsHint: '留空表示不限制。约束在数据网关上强制执行：模型/供应商/IP 不符返回 403，超限返回 429。',
+    allowedModels: '允许的模型', allowedProviders: '允许的供应商', allowedIps: '允许的 IP / CIDR',
+    listHint: '逗号分隔，支持前缀通配，例如 gpt-*',
+    maxConcurrency: '最大并发', expiresAt: '过期时间', expiresHint: '留空表示永不过期'
   },
   policies: {
     title: '安全策略', description: '以版本化规则控制敏感信息检测、阻断、脱敏与告警，发布前可先试运行评估影响。',
@@ -108,6 +119,9 @@ export const zhCN = {
   me: {
     title: '个人工作台', description: '管理你的模型接入、个人密钥与近 30 天用量。个人流量同样纳入企业安全审计。',
     usage: '我的用量', providers: '我的供应商', keys: '我的密钥', models: '可用模型', overview: '工作台总览',
+    rotateKey: '轮换密钥', revokeKey: '吊销密钥',
+    revokeKeyHint: '吊销「{{name}}」后，使用它的应用会立即失去访问权限。此操作不可撤销。',
+    testProvider: '测试连接', disableProvider: '停用供应商',
     modelsHint: '使用个人虚拟密钥查看当前可访问的完整模型 ID。', byokHint: '填入自己的供应商 Key，费用由你承担，调用仍会被企业安全策略检查并强制审计。',
     createByok: '接入我的供应商', createMyKey: '生成个人密钥', billingOrg: '企业账', billingUser: '个人账',
     usageEmpty: '近 30 天还没有个人调用', providerEmpty: '还没有个人供应商', keyEmpty: '还没有个人密钥',
@@ -183,8 +197,7 @@ export const zhCN = {
     deactivationNote: '为保证审计可追溯，用户、团队和应用采用停用而不是删除；被停用的用户会立即失去控制台访问。'
   },
   onboarding: {
-    titleAdmin: '从 models.dev 接入企业供应商',
-    titlePersonal: '从 models.dev 接入个人供应商',
+    titleAdmin: '从 models.dev 接入企业供应商',    titlePersonal: '从 models.dev 接入个人供应商',
     stepProvider: '选择供应商', stepModels: '选择模型', stepCredentials: '填写凭据',
     providerHint: '供应商与模型来自 models.dev 目录。选择供应商后，只展示该供应商的真实模型与价格。',
     searchProvider: '搜索供应商名称或标识…', modelCount: '{{count}} 个模型', needsEndpoint: '需填端点',
@@ -197,6 +210,17 @@ export const zhCN = {
     credentialNote: 'API Key 只会加密保存在 Secure Hub 服务端，用于你填写的那一个供应商。',
     connect: '确认接入',
     catalogSourceNote: '目录来自 models.dev，只包含模型能力、上下文与公开价格；接口地址在目录提供时自动带出。'
+  },
+  entitlements: {
+    title: '访问授权', description: '把供应商和具体模型分配给全体、团队或个人；配置后按授权严格放行。',
+    add: '新增授权', edit: '编辑授权', listTitle: '授权规则', search: '搜索供应商、主体或模型…',
+    subject: '授权对象', subjectAll: '全体成员', subjectTeam: '团队', subjectUser: '用户',
+    expiresAt: '到期时间', never: '永不过期', allModels: '该供应商全部模型', modelsHint: '不选表示该供应商全部模型。',
+    unlimitedHint: '留空表示不限制', expiresHint: '留空表示永久有效',
+    ruleHint: '某供应商一旦配置了授权，只放行匹配的团队/用户；从未配置授权的供应商保持开放，便于冷启动。',
+    empty: '还没有授权规则', emptyHint: '为团队或个人分配模型后，未授权请求会被拒绝。',
+    saved: '授权已保存', deleted: '授权已删除',
+    deleteTitle: '删除这条授权？', deleteHint: '删除后该主体将失去对应供应商的访问权限，除非仍有其他授权匹配。'
   },
   admin: {
     overviewHint: '企业调用、成本与拦截概览', createProvider: '添加企业供应商', createKey: '签发应用密钥',
@@ -211,7 +235,7 @@ export const en = {
     admin: 'Admin', me: 'My Workspace', workspace: 'My workspace', assistant: 'Audit assistant',
     overview: 'Overview', providers: 'Providers', catalog: 'Model catalog', routing: 'Model routing',
     keys: 'Virtual keys', policies: 'Security policies', budgets: 'Usage & budgets', audit: 'Audit log',
-    organization: 'Organization',
+    organization: 'Organization', entitlements: 'Entitlements',
     models: 'Available models', logout: 'Sign out', management: 'MANAGEMENT', personal: 'PERSONAL',
     account: 'Account & security', main: 'Main navigation', open: 'Open navigation', close: 'Close navigation'
   },
@@ -251,7 +275,13 @@ export const en = {
     createTitle: 'Connect enterprise provider', createHint: 'Call it through org/<alias>/<model> after saving.',
     presetCustom: 'Custom OpenAI-compatible endpoint', selectPreset: 'Provider type', apiKeyHint: 'Encrypted on the server and never visible after creation.',
     modelsHint: 'Comma-separated, for example gpt-4o, gpt-4o-mini', aliasHint: 'Globally unique and used in the fully qualified model ID.',
-    created: 'Provider connected', baseUrlHint: 'Include /v1, for example https://api.openai.com/v1'
+    created: 'Provider connected', baseUrlHint: 'Include /v1, for example https://api.openai.com/v1',
+    test: 'Test connection', testOk: '{{name}} is reachable', testFailed: '{{name}} test failed: {{error}}',
+    editTitle: 'Edit provider · {{name}}', updated: 'Provider {{name}} updated',
+    rotate: 'Rotate credential', rotateTitle: 'Rotate credential · {{name}}', rotateHint: 'The previous credential is retired immediately; the new one is encrypted at rest.',
+    rotated: 'Credential rotated for {{name}}',
+    disable: 'Disable provider', disableTitle: 'Disable this provider?', disableHint: 'Disabling {{name}} immediately removes its models from routing and /v1/models.',
+    disabled: 'Provider {{name}} disabled'
   },
   catalog: {
     title: 'Model catalog', description: 'Search capabilities, context windows, and prices synced from models.dev to guide provider and routing decisions.',
@@ -275,7 +305,12 @@ export const en = {
     organization: 'Organization app', user: 'Personal user', scopes: 'Scopes', displayNameHint: 'For example: Production support bot',
     createTitle: 'Issue application key', createHint: 'Includes chat:write and models:read by default.', revoke: 'Revoke key',
     revokeTitle: 'Revoke this key?', revokeHint: 'Applications using “{{name}}” will immediately lose gateway access. This cannot be undone.',
-    revokedSuccess: 'Key revoked', integration: 'Quick start', integrationHint: 'Send requests to this gateway using a fully qualified model ID.'
+    revokedSuccess: 'Key revoked', integration: 'Quick start', integrationHint: 'Send requests to this gateway using a fully qualified model ID.',
+    constraints: 'Constraints', constraintsTitle: 'Access constraints · {{name}}',
+    constraintsHint: 'Empty means unlimited. Constraints are enforced at the data plane: model/provider/IP mismatches return 403, rate limits return 429.',
+    allowedModels: 'Allowed models', allowedProviders: 'Allowed providers', allowedIps: 'Allowed IPs / CIDRs',
+    listHint: 'Comma-separated; prefix wildcards such as gpt-* are supported',
+    maxConcurrency: 'Max concurrency', expiresAt: 'Expires at', expiresHint: 'Leave empty to never expire'
   },
   policies: {
     title: 'Security policies', description: 'Version sensitive-data detection, blocking, redaction, and alerting rules. Dry-run before publishing.',
@@ -315,6 +350,9 @@ export const en = {
   me: {
     title: 'My workspace', description: 'Manage personal providers, keys, and the last 30 days of usage. Personal traffic follows the same enterprise audit controls.',
     usage: 'My usage', providers: 'My providers', keys: 'My keys', models: 'Available models', overview: 'Workspace overview',
+    rotateKey: 'Rotate key', revokeKey: 'Revoke key',
+    revokeKeyHint: 'Revoking “{{name}}” immediately removes access for applications using it. This cannot be undone.',
+    testProvider: 'Test connection', disableProvider: 'Disable provider',
     modelsHint: 'Use a personal virtual key to inspect fully qualified model IDs currently available to you.', byokHint: 'Use your own provider key. You pay the provider, while gateway security checks and mandatory audit still apply.',
     createByok: 'Connect my provider', createMyKey: 'Create personal key', billingOrg: 'Org', billingUser: 'Personal',
     usageEmpty: 'No personal usage in the last 30 days', providerEmpty: 'No personal providers yet', keyEmpty: 'No personal keys yet',
@@ -404,6 +442,17 @@ export const en = {
     credentialNote: 'The API key is encrypted on the Secure Hub server and used only for this provider.',
     connect: 'Connect provider',
     catalogSourceNote: 'Catalog data comes from models.dev: capabilities, context, and public prices. Endpoints are prefilled when the catalog provides one.'
+  },
+  entitlements: {
+    title: 'Entitlements', description: 'Assign providers and specific models to everyone, a team, or a user. Once configured, access is enforced strictly.',
+    add: 'Add entitlement', edit: 'Edit entitlement', listTitle: 'Entitlement rules', search: 'Search provider, subject, or model…',
+    subject: 'Subject', subjectAll: 'Everyone', subjectTeam: 'Team', subjectUser: 'User',
+    expiresAt: 'Expires', never: 'Never', allModels: 'All models from this provider', modelsHint: 'Leave empty to allow every model from the provider.',
+    unlimitedHint: 'Leave empty for no limit', expiresHint: 'Leave empty for no expiry',
+    ruleHint: 'Once a provider has entitlements, only matching teams or users are allowed. Providers without any entitlement stay open for cold start.',
+    empty: 'No entitlement rules yet', emptyHint: 'Assign models to teams or users to start enforcing access.',
+    saved: 'Entitlement saved', deleted: 'Entitlement deleted',
+    deleteTitle: 'Delete this entitlement?', deleteHint: 'The subject loses access to this provider unless another matching entitlement remains.'
   },
   admin: {
     overviewHint: 'Calls, cost, and blocks across the organization', createProvider: 'Add enterprise provider', createKey: 'Issue application key',

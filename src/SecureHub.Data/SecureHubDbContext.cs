@@ -99,6 +99,7 @@ public class SecureHubDbContext : DbContext
             e.Property(x => x.ProviderKey).HasMaxLength(100).IsRequired();
             e.Property(x => x.BaseUrl).HasMaxLength(500).IsRequired();
             e.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
+            e.Property(x => x.LastTestError).HasMaxLength(500);
             e.HasIndex(x => new { x.Scope, x.OwnerUserId });
         });
 

@@ -247,7 +247,8 @@ public static class ManagementEndpoints
             owner_id = k.OwnerId,
             is_revoked = k.IsRevoked,
             created_at = k.CreatedAt,
-            expires_at = k.ExpiresAt
+            expires_at = k.ExpiresAt,
+            constraints = k.ConstraintsJson
         }), ct);
     }
 

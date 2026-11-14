@@ -52,6 +52,7 @@ export default function KeysPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<KeyRow | null>(null);
+  const [constraintsTarget, setConstraintsTarget] = useState<KeyRow | null>(null);
   const [revoked, setRevoked] = useState(false);
 
   const load = useCallback(async () => {
@@ -117,7 +118,7 @@ export default function KeysPage() {
                 <TableCell><Chip size="small" variant="outlined" label={row.owner_type} /></TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{format.dateTime(row.created_at)}</TableCell>
                 <TableCell><StatusChip status={row.is_revoked ? 'revoked' : 'active'} label={row.is_revoked ? t('common.revoked') : t('common.active')} /></TableCell>
-                <TableCell align="right"><Button size="small" color="error" startIcon={<BlockIcon />} disabled={row.is_revoked} onClick={() => setRevokeTarget(row)}>{t('keys.revoke')}</Button></TableCell>
+                <TableCell align="right"><Stack direction="row" spacing={0.5} justifyContent="flex-end"><Button size="small" onClick={() => setConstraintsTarget(row)} disabled={row.is_revoked}>{t('keys.constraints')}</Button><Button size="small" color="error" startIcon={<BlockIcon />} disabled={row.is_revoked} onClick={() => setRevokeTarget(row)}>{t('keys.revoke')}</Button></Stack></TableCell>
               </TableRow>
             ))}</TableBody>
           </Table></Box>
@@ -139,6 +140,77 @@ export default function KeysPage() {
       </Dialog>
       <SecretDialog open={!!secret} secret={secret ?? ''} onClose={() => setSecret(null)} />
       <ConfirmDialog open={!!revokeTarget} title={t('keys.revokeTitle')} description={t('keys.revokeHint', { name: revokeTarget?.display_name ?? '' })} confirmLabel={t('keys.revoke')} busy={busy} danger onClose={() => setRevokeTarget(null)} onConfirm={() => void revoke()} />
+      {constraintsTarget && (
+        <KeyConstraintsDialog
+          keyRow={constraintsTarget}
+          onClose={() => setConstraintsTarget(null)}
+          onSaved={() => { setConstraintsTarget(null); void load(); }}
+        />
+      )}
     </Stack>
+  );
+}
+
+function KeyConstraintsDialog({ keyRow, onClose, onSaved }: {
+  keyRow: KeyRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useTranslation();
+  const parsed = useMemo(() => {
+    try { return keyRow.constraints ? JSON.parse(keyRow.constraints) : {}; }
+    catch { return {}; }
+  }, [keyRow.constraints]);
+  const [models, setModels] = useState((parsed.allowedModels ?? []).join(', '));
+  const [providers, setProviders] = useState((parsed.allowedProviders ?? []).join(', '));
+  const [cidrs, setCidrs] = useState((parsed.allowedIpCidrs ?? []).join(', '));
+  const [rpm, setRpm] = useState(parsed.rpm?.toString() ?? '');
+  const [tpm, setTpm] = useState(parsed.tpm?.toString() ?? '');
+  const [concurrency, setConcurrency] = useState(parsed.maxConcurrency?.toString() ?? '');
+  const [expiresAt, setExpiresAt] = useState(keyRow.expires_at?.slice(0, 10) ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const split = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
+
+  const submit = async () => {
+    setBusy(true); setError(null);
+    try {
+      await api.updateKeyConstraints(keyRow.id, {
+        allowedModels: split(models),
+        allowedProviders: split(providers),
+        allowedIpCidrs: split(cidrs),
+        rpm: rpm ? Number(rpm) : null,
+        tpm: tpm ? Number(tpm) : null,
+        maxConcurrency: concurrency ? Number(concurrency) : null,
+        expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59Z`).toISOString() : null
+      });
+      onSaved();
+    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open onClose={busy ? undefined : onClose} fullWidth maxWidth="sm">
+      <DialogTitle>{t('keys.constraintsTitle', { name: keyRow.display_name })}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} mt={1}>
+          <Alert severity="info">{t('keys.constraintsHint')}</Alert>
+          <TextField label={t('keys.allowedModels')} value={models} onChange={(event) => setModels(event.target.value)} helperText={t('keys.listHint')} autoComplete="off" />
+          <TextField label={t('keys.allowedProviders')} value={providers} onChange={(event) => setProviders(event.target.value)} helperText={t('keys.listHint')} autoComplete="off" />
+          <TextField label={t('keys.allowedIps')} value={cidrs} onChange={(event) => setCidrs(event.target.value)} helperText="10.0.0.0/8, 192.168.1.10/32" autoComplete="off" />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField fullWidth type="number" label="RPM" value={rpm} onChange={(event) => setRpm(event.target.value)} inputProps={{ min: 1 }} />
+            <TextField fullWidth type="number" label="TPM" value={tpm} onChange={(event) => setTpm(event.target.value)} inputProps={{ min: 1 }} />
+            <TextField fullWidth type="number" label={t('keys.maxConcurrency')} value={concurrency} onChange={(event) => setConcurrency(event.target.value)} inputProps={{ min: 1 }} />
+          </Stack>
+          <TextField type="date" label={t('keys.expiresAt')} value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} InputLabelProps={{ shrink: true }} helperText={t('keys.expiresHint')} />
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
+        <Button variant="contained" onClick={() => void submit()} disabled={busy}>{busy ? t('common.working') : t('common.save')}</Button>
+      </DialogActions>
+    </Dialog>
   );
 }

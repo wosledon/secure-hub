@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using SecureHub.Core.Domain;
 using SecureHub.Core.Models;
 using SecureHub.Core.Options;
+using SecureHub.Core.Security;
 using SecureHub.Data;
 
 namespace SecureHub.Api.Services;
@@ -67,7 +68,7 @@ public sealed class RouteResolver(
 
                     if (!ScopeVisible(member.Scope, provider, explicitGroup.AllowCrossScope, ownerType, ownerId)) continue;
                     if (member.Scope == ModelScope.Org &&
-                        !IsEntitled(entitlements, provider.Id, teamId, ownerId, now)) continue;
+                        !EntitlementPolicy.AllowsModel(entitlements, provider.Id, member.UpstreamModel, teamId, ownerId, now)) continue;
 
                     candidates.Add(new RouteCandidate(
                         member.Id,
@@ -108,7 +109,7 @@ public sealed class RouteResolver(
                         continue;
                     }
 
-                    if (!IsEntitled(entitlements, provider.Id, teamId, ownerId, now)) continue;
+                    if (!EntitlementPolicy.AllowsModel(entitlements, provider.Id, offering.UpstreamModel, teamId, ownerId, now)) continue;
                 }
 
                 candidates.Add(new RouteCandidate(
@@ -176,25 +177,4 @@ public sealed class RouteResolver(
         string.Equals(offering.UpstreamModel, model, StringComparison.Ordinal) ||
         string.Equals(offering.CanonicalModelId, model, StringComparison.Ordinal) ||
         string.Equals(offering.GroupKey, model, StringComparison.Ordinal);
-
-    /// <summary>
-    /// 分配规则：某供应商一旦配置了 Entitlement，就按分配严格判断；
-    /// 从未配置分配的供应商视为"未启用分配"，允许访问（便于冷启动）。
-    /// </summary>
-    private static bool IsEntitled(
-        IReadOnlyList<Entitlement> entitlements,
-        Guid providerId,
-        Guid? teamId,
-        Guid ownerId,
-        DateTimeOffset now)
-    {
-        var forProvider = entitlements.Where(e => e.ProviderId == providerId).ToList();
-        if (forProvider.Count == 0) return true;
-
-        return forProvider.Any(e =>
-            (e.ExpiresAt is null || e.ExpiresAt > now) &&
-            (e.SubjectType == SubjectType.All ||
-             (e.SubjectType == SubjectType.Team && e.SubjectId == teamId) ||
-             (e.SubjectType == SubjectType.User && e.SubjectId == ownerId)));
-    }
 }

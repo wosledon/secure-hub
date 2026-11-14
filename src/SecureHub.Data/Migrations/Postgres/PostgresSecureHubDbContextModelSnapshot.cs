@@ -700,6 +700,13 @@ namespace SecureHub.Data.Migrations.Postgres
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("LastTestError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("LastTestedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("OwnerUserId")
                         .HasColumnType("uuid");
 
@@ -710,6 +717,9 @@ namespace SecureHub.Data.Migrations.Postgres
 
                     b.Property<int>("Scope")
                         .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 

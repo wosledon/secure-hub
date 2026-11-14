@@ -17,6 +17,9 @@ public sealed class Provider
     public bool Enabled { get; set; } = true;
     public string HealthStatus { get; set; } = "unknown";
     public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
+    public DateTimeOffset? LastTestedAt { get; set; }
+    public string? LastTestError { get; set; }
 }
 
 public sealed class ProviderCredential

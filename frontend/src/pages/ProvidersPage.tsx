@@ -5,9 +5,16 @@ import {
   Box,
   Button,
   Card,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -19,13 +26,17 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import BlockIcon from '@mui/icons-material/Block';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import NetworkCheckIcon from '@mui/icons-material/NetworkCheck';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, type ProviderRow } from '../api';
-import { CopyButton, EmptyState, ErrorState, PageHeader, StatusChip, TableSkeleton } from '../components/ui';
+import { ConfirmDialog, CopyButton, EmptyState, ErrorState, PageHeader, StatusChip, TableSkeleton } from '../components/ui';
 import ProviderOnboardingDialog from '../components/ProviderOnboardingDialog';
 
 export default function ProvidersPage() {
@@ -36,6 +47,12 @@ export default function ProvidersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<ProviderRow | null>(null);
+  const [rotateTarget, setRotateTarget] = useState<ProviderRow | null>(null);
+  const [disableTarget, setDisableTarget] = useState<ProviderRow | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +66,29 @@ export default function ProvidersPage() {
     return rows.filter((row) => !search || `${row.alias} ${row.providerKey} ${row.baseUrl} ${row.displayName}`.toLowerCase().includes(search));
   }, [rows, query]);
 
+  const test = async (row: ProviderRow) => {
+    setTestingId(row.id);
+    setMessage(null);
+    try {
+      const result = await api.testProvider(row.id);
+      setMessage(result.healthy
+        ? t('providers.testOk', { name: row.alias })
+        : t('providers.testFailed', { name: row.alias, error: result.error ?? result.health_status }));
+      await load();
+    } catch (err) { setError((err as Error).message); } finally { setTestingId(null); }
+  };
+
+  const disable = async () => {
+    if (!disableTarget) return;
+    setBusy(true);
+    try {
+      await api.disableProvider(disableTarget.id);
+      setDisableTarget(null);
+      setMessage(t('providers.disabled', { name: disableTarget.alias }));
+      await load();
+    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  };
+
   return (
     <Stack spacing={3}>
       <PageHeader title={t('providers.title')} description={t('providers.description')} actions={<>
@@ -57,6 +97,7 @@ export default function ProvidersPage() {
       </>} />
       {error && <ErrorState message={error} retry={() => void load()} />}
       {success && <Alert severity="success" onClose={() => setSuccess(false)}>{t('providers.created')}</Alert>}
+      {message && <Alert severity="info" onClose={() => setMessage(null)}>{message}</Alert>}
       <Card>
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <Box sx={{ flexGrow: 1 }}><Typography variant="h2">{t('providers.listTitle')}</Typography><Typography variant="caption" color="text.secondary">{t('common.results', { count: filtered.length })}</Typography></Box>
@@ -76,7 +117,17 @@ export default function ProvidersPage() {
                     <TableCell sx={{ maxWidth: 360 }}><Stack direction="row" alignItems="center" spacing={0.5}><Typography variant="body2" color="text.secondary" noWrap>{row.baseUrl}</Typography><CopyButton text={row.baseUrl} iconOnly /></Stack></TableCell>
                     <TableCell><StatusChip status={row.scope} /></TableCell>
                     <TableCell><StatusChip status={row.enabled ? row.healthStatus : 'disabled'} /></TableCell>
-                    <TableCell align="right"><Button component={RouterLink} to={`/catalog?provider=${encodeURIComponent(row.providerKey)}`} size="small" endIcon={<ArrowForwardIcon />}>{t('nav.catalog')}</Button></TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        <Tooltip title={t('providers.test')}>
+                          <span><IconButton size="small" onClick={() => void test(row)} disabled={testingId === row.id} aria-label={t('providers.test')}>{testingId === row.id ? <CircularProgress size={16} /> : <NetworkCheckIcon fontSize="small" />}</IconButton></span>
+                        </Tooltip>
+                        <Tooltip title={t('common.configure')}><IconButton size="small" onClick={() => setEditTarget(row)} aria-label={t('common.configure')}><EditOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                        <Tooltip title={t('providers.rotate')}><IconButton size="small" onClick={() => setRotateTarget(row)} aria-label={t('providers.rotate')}><VpnKeyIcon fontSize="small" /></IconButton></Tooltip>
+                        <Tooltip title={t('providers.disable')}><span><IconButton size="small" color="error" onClick={() => setDisableTarget(row)} disabled={!row.enabled} aria-label={t('providers.disable')}><BlockIcon fontSize="small" /></IconButton></span></Tooltip>
+                        <Button component={RouterLink} to={`/catalog?provider=${encodeURIComponent(row.providerKey)}`} size="small" endIcon={<ArrowForwardIcon />}>{t('nav.catalog')}</Button>
+                      </Stack>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -93,6 +144,107 @@ export default function ProvidersPage() {
         onClose={() => setOpen(false)}
         onCreated={() => { setSuccess(true); void load(); }}
       />
+
+      {editTarget && (
+        <EditProviderDialog
+          provider={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={(text) => { setEditTarget(null); setMessage(text); void load(); }}
+        />
+      )}
+      {rotateTarget && (
+        <RotateProviderDialog
+          provider={rotateTarget}
+          onClose={() => setRotateTarget(null)}
+          onSaved={(text) => { setRotateTarget(null); setMessage(text); void load(); }}
+        />
+      )}
+      <ConfirmDialog
+        open={!!disableTarget}
+        title={t('providers.disableTitle')}
+        description={t('providers.disableHint', { name: disableTarget?.alias ?? '' })}
+        confirmLabel={t('providers.disable')}
+        busy={busy}
+        danger
+        onClose={() => setDisableTarget(null)}
+        onConfirm={() => void disable()}
+      />
     </Stack>
+  );
+}
+
+function EditProviderDialog({ provider, onClose, onSaved }: {
+  provider: ProviderRow;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [displayName, setDisplayName] = useState(provider.displayName);
+  const [baseUrl, setBaseUrl] = useState(provider.baseUrl);
+  const [enabled, setEnabled] = useState(provider.enabled);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setBusy(true); setError(null);
+    try {
+      await api.updateProvider(provider.id, { displayName: displayName.trim(), baseUrl: baseUrl.trim(), enabled });
+      onSaved(t('providers.updated', { name: provider.alias }));
+    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open onClose={busy ? undefined : onClose} fullWidth maxWidth="sm">
+      <DialogTitle>{t('providers.editTitle', { name: provider.alias })}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2.25} mt={1}>
+          <TextField label={t('common.name')} value={displayName} onChange={(event) => setDisplayName(event.target.value)} name="displayName" autoComplete="off" />
+          <TextField label={t('common.baseUrl')} value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} name="baseUrl" autoComplete="off" spellCheck={false} />
+          <FormControlLabel control={<Switch checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />} label={t('common.enabled')} />
+          {provider.lastTestError && <Alert severity="warning">{provider.lastTestError}</Alert>}
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
+        <Button variant="contained" onClick={() => void submit()} disabled={busy || !displayName.trim() || !baseUrl.trim()}>{busy ? t('common.working') : t('common.save')}</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function RotateProviderDialog({ provider, onClose, onSaved }: {
+  provider: ProviderRow;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [apiKey, setApiKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setBusy(true); setError(null);
+    try {
+      await api.rotateProviderCredential(provider.id, apiKey.trim());
+      onSaved(t('providers.rotated', { name: provider.alias }));
+    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open onClose={busy ? undefined : onClose} fullWidth maxWidth="sm">
+      <DialogTitle>{t('providers.rotateTitle', { name: provider.alias })}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} mt={1}>
+          <Alert severity="warning">{t('providers.rotateHint')}</Alert>
+          <TextField label={t('common.apiKey')} type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} autoComplete="new-password" required />
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>{t('common.cancel')}</Button>
+        <Button variant="contained" onClick={() => void submit()} disabled={busy || !apiKey.trim()}>{busy ? t('common.working') : t('providers.rotate')}</Button>
+      </DialogActions>
+    </Dialog>
   );
 }

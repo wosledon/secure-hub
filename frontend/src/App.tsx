@@ -36,6 +36,7 @@ import RouteIcon from '@mui/icons-material/Route';
 import SecurityIcon from '@mui/icons-material/Security';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboard';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import { Navigate, Route, Routes, Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from './api';
@@ -56,6 +57,7 @@ const PoliciesPage = lazy(() => import('./pages/PoliciesPage'));
 const UsagePage = lazy(() => import('./pages/UsagePage'));
 const AuditPage = lazy(() => import('./pages/AuditPage'));
 const OrganizationPage = lazy(() => import('./pages/OrganizationPage'));
+const EntitlementsPage = lazy(() => import('./pages/EntitlementsPage'));
 const AssistantWorkspace = lazy(() => import('./pages/AssistantWorkspace'));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
 
@@ -93,6 +95,7 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
     { path: '/providers', label: t('nav.providers'), icon: <DnsIcon />, admin: true },
     { path: '/catalog', label: t('nav.catalog'), icon: <AssessmentIcon />, admin: true },
     { path: '/organization', label: t('nav.organization'), icon: <GroupsIcon />, admin: true },
+    { path: '/entitlements', label: t('nav.entitlements'), icon: <VerifiedUserIcon />, admin: true },
     { path: '/routing', label: t('nav.routing'), icon: <RouteIcon />, admin: true },
     { path: '/keys', label: t('nav.keys'), icon: <KeyIcon />, admin: true },
     { path: '/policies', label: t('nav.policies'), icon: <SecurityIcon />, admin: true },
@@ -257,6 +260,7 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
             <Route path="/providers" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <ProvidersPage />} />
             <Route path="/catalog" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <CatalogPage />} />
             <Route path="/organization" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <OrganizationPage />} />
+            <Route path="/entitlements" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <EntitlementsPage />} />
             <Route path="/routing" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <RoutingPage />} />
             <Route path="/keys" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <KeysPage />} />
             <Route path="/policies" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <PoliciesPage />} />

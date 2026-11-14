@@ -11,6 +11,7 @@ using SecureHub.Core.Localization;
 using SecureHub.Core.Models;
 using SecureHub.Core.Options;
 using SecureHub.Core.Security.Guardrails;
+using SecureHub.Core.Security;
 using SecureHub.Core.Security.Policies;
 using SecureHub.Data;
 
@@ -35,6 +36,7 @@ public static class DataPlaneEndpoints
         PolicyStore policies,
         BudgetGuard budgets,
         ProviderCredentialStore credentials,
+        KeyRateLimiter rateLimiter,
         SecureHubDbContext db,
         IHttpClientFactory httpClientFactory,
         IOptions<SecureHubOptions> options,
@@ -54,6 +56,36 @@ public static class DataPlaneEndpoints
                 authError ?? ReasonCodes.InvalidApiKey,
                 severity: AuditSeverity.Warning, ct: ct);
             await ApiError.Unauthorized(localizer).ExecuteAsync(http);
+            return;
+        }
+
+        // 1.1) 密钥 IP 约束
+        var remoteIp = http.Connection.RemoteIpAddress?.ToString();
+        if (!auth.Constraints.AllowsIp(remoteIp))
+        {
+            await audit.AppendAsync(
+                AuditEventTypes.AccessDenied, "virtualKey", auth.OwnerId.ToString(), auth.Label,
+                ReasonCodes.InsufficientScope, action: GuardrailAction.Block,
+                severity: AuditSeverity.Warning, billingOwner: auth.Billing,
+                configure: e => e.RequestId = requestId, ct: ct);
+            await ApiError.Forbidden(localizer, ReasonCodes.InsufficientScope).ExecuteAsync(http);
+            return;
+        }
+
+        // 1.2) 每密钥限流；using 保证所有返回路径都会释放并发计数
+        using var rateLease = rateLimiter.Acquire(auth.VirtualKeyId, auth.Constraints);
+        if (!rateLease.Allowed)
+        {
+            await audit.AppendAsync(
+                AuditEventTypes.RateLimited, "virtualKey", auth.OwnerId.ToString(), auth.Label,
+                ReasonCodes.QuotaExceeded, action: GuardrailAction.Block,
+                severity: AuditSeverity.Warning, billingOwner: auth.Billing,
+                configure: e =>
+                {
+                    e.RequestId = requestId;
+                    e.Detail = JsonSerializer.Serialize(new { constraint = rateLease.ReasonCode });
+                }, ct: ct);
+            await ApiError.Create(429, ReasonCodes.QuotaExceeded, localizer, requestId).ExecuteAsync(http);
             return;
         }
 
@@ -235,6 +267,24 @@ public static class DataPlaneEndpoints
 
         var candidate = decision.Candidate!;
 
+        // 7.1) 密钥模型/供应商约束
+        if (!auth.Constraints.AllowsModel(candidate.UpstreamModel, candidate.ProviderAlias))
+        {
+            await audit.AppendAsync(
+                AuditEventTypes.AccessDenied, "virtualKey", auth.OwnerId.ToString(), auth.Label,
+                ReasonCodes.InsufficientScope, action: GuardrailAction.Block, severity: AuditSeverity.Warning,
+                billingOwner: auth.Billing,
+                configure: e =>
+                {
+                    e.RequestId = requestId;
+                    e.ModelAlias = rawModel;
+                    e.ProviderId = candidate.ProviderId;
+                    e.UpstreamModel = candidate.UpstreamModel;
+                }, ct: ct);
+            await ApiError.Forbidden(localizer, ReasonCodes.InsufficientScope).ExecuteAsync(http);
+            return;
+        }
+
         // 8) 凭据
         var upstreamKey = await credentials.GetApiKeyAsync(db, candidate.ProviderId, null, ct);
         if (string.IsNullOrEmpty(upstreamKey))
@@ -310,7 +360,7 @@ public static class DataPlaneEndpoints
             await http.Response.Body.FlushAsync(ct);
 
             await RecordUsageAsync(
-                db, audit, budgets, auth, decision, provider.Id, candidate.UpstreamModel,
+                db, audit, budgets, rateLimiter, auth, decision, provider.Id, candidate.UpstreamModel,
                 requestId, rawModel, originalTokens, EstimateTokens(outboundBody),
                 0, estimated: true, rolledBack, ct);
             return;
@@ -346,7 +396,7 @@ public static class DataPlaneEndpoints
 
         var (inputTokens, outputTokens) = ReadUsage(responseBody);
         await RecordUsageAsync(
-            db, audit, budgets, auth, decision, provider.Id, candidate.UpstreamModel,
+            db, audit, budgets, rateLimiter, auth, decision, provider.Id, candidate.UpstreamModel,
             requestId, rawModel, originalTokens, inputTokens,
             outputTokens, estimated: inputTokens == 0, rolledBack, ct);
     }
@@ -355,6 +405,7 @@ public static class DataPlaneEndpoints
         SecureHubDbContext db,
         AuditWriter audit,
         BudgetGuard budgetGuard,
+        KeyRateLimiter rateLimiter,
         AuthContext auth,
         RouteDecision decision,
         Guid providerId,
@@ -398,6 +449,7 @@ public static class DataPlaneEndpoints
 
         await db.SaveChangesAsync(ct);
         await budgetGuard.AccumulateAsync(auth.AppId, auth.TeamId, inputTokens + outputTokens, cost, ct);
+        rateLimiter.AddTokens(auth.VirtualKeyId, inputTokens + outputTokens);
 
         await audit.AppendAsync(
             AuditEventTypes.RouteSelected,
@@ -437,8 +489,16 @@ public static class DataPlaneEndpoints
             return;
         }
 
+        if (!auth.Constraints.AllowsIp(http.Connection.RemoteIpAddress?.ToString()))
+        {
+            await ApiError.Forbidden(localizer, ReasonCodes.InsufficientScope).ExecuteAsync(http);
+            return;
+        }
+
         var providers = await db.Providers.AsNoTracking().ToListAsync(ct);
         var offerings = await db.ProviderOfferings.AsNoTracking().ToListAsync(ct);
+        var entitlements = await db.Entitlements.AsNoTracking().ToListAsync(ct);
+        var now = DateTimeOffset.UtcNow;
 
         var items = new List<object>();
         foreach (var offering in offerings.Where(o => o.Enabled))
@@ -451,6 +511,14 @@ public static class DataPlaneEndpoints
             {
                 // 个人仍可访问企业分配的模型；此处仅作配置兜底，不阻断
             }
+
+            if (provider.Scope == ProviderScope.Org &&
+                !EntitlementPolicy.AllowsModel(entitlements, provider.Id, offering.UpstreamModel, auth.TeamId, auth.OwnerId, now))
+            {
+                continue;
+            }
+
+            if (!auth.Constraints.AllowsModel(offering.UpstreamModel, provider.Alias)) continue;
 
             var scope = provider.Scope == ProviderScope.User ? ModelScope.User : ModelScope.Org;
             items.Add(new

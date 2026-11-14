@@ -695,6 +695,13 @@ namespace SecureHub.Data.Migrations.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("LastTestError")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastTestedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("OwnerUserId")
                         .HasColumnType("TEXT");
 
@@ -704,6 +711,9 @@ namespace SecureHub.Data.Migrations.Sqlite
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Scope")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdatedAt")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");

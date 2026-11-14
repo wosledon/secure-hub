@@ -99,6 +99,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body)
     }),
+  updateProvider: (id: string, body: { displayName?: string; baseUrl?: string; enabled?: boolean }) =>
+    request<ProviderRow>(`/api/admin/providers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  disableProvider: (id: string) =>
+    request<{ ok: boolean }>(`/api/admin/providers/${id}`, { method: 'DELETE' }),
+  rotateProviderCredential: (id: string, apiKey: string) =>
+    request<{ ok: boolean; key_hint: string }>(`/api/admin/providers/${id}/credential`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    }),
+  testProvider: (id: string) =>
+    request<{ healthy: boolean; health_status: string; tested_at: string; error?: string | null }>(
+      `/api/admin/providers/${id}/test`,
+      { method: 'POST' }
+    ),
+  providerDetail: (id: string) => request<ProviderDetail>(`/api/admin/providers/${id}`),
 
   keys: () => request<KeyRow[]>('/api/admin/keys'),
   createKey: (body: { displayName: string; ownerType: 0 | 1; ownerId: string; scopes?: string[] }) =>
@@ -143,9 +158,41 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body)
     }),
+  updateMyProvider: (id: string, body: { displayName?: string; baseUrl?: string; enabled?: boolean }) =>
+    request<ProviderRow>(`/api/me/providers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  disableMyProvider: (id: string) =>
+    request<{ ok: boolean }>(`/api/me/providers/${id}`, { method: 'DELETE' }),
+  rotateMyProviderCredential: (id: string, apiKey: string) =>
+    request<{ ok: boolean; key_hint: string }>(`/api/me/providers/${id}/credential`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    }),
+  testMyProvider: (id: string) =>
+    request<{ healthy: boolean; health_status: string; tested_at: string; error?: string | null }>(
+      `/api/me/providers/${id}/test`,
+      { method: 'POST' }
+    ),
   myKeys: () => request<MyKeyRow[]>('/api/me/keys'),
   createMyKey: () =>
     request<{ key: string; key_id: string }>('/api/me/keys', { method: 'POST' }),
+  revokeMyKey: (id: string) => request<{ ok: boolean }>(`/api/me/keys/${id}/revoke`, { method: 'POST' }),
+  rotateMyKey: (id: string) =>
+    request<{ key: string; key_id: string; replaced_key_id: string }>(`/api/me/keys/${id}/rotate`, { method: 'POST' }),
+  updateKeyConstraints: (id: string, body: KeyConstraintsBody) =>
+    request<{ ok: boolean; expires_at?: string | null }>(`/api/admin/keys/${id}/constraints`, {
+      method: 'PUT',
+      body: JSON.stringify(body)
+    }),
+  updateMyKeyConstraints: (id: string, body: KeyConstraintsBody) =>
+    request<{ ok: boolean; expires_at?: string | null }>(`/api/me/keys/${id}/constraints`, {
+      method: 'PUT',
+      body: JSON.stringify(body)
+    }),
+  entitlements: () => request<EntitlementRow[]>('/api/admin/entitlements'),
+  upsertEntitlement: (body: UpsertEntitlementBody) =>
+    request<{ id: string }>('/api/admin/entitlements', { method: 'POST', body: JSON.stringify(body) }),
+  deleteEntitlement: (id: string) =>
+    request<{ ok: boolean }>(`/api/admin/entitlements/${id}`, { method: 'DELETE' }),
   myUsage: () =>
     request<{ data: UsageRow[] }>('/api/me/usage'),
 
@@ -335,6 +382,58 @@ export interface ProviderRow {
   scope: string;
   enabled: boolean;
   healthStatus: string;
+  lastTestedAt?: string | null;
+  lastTestError?: string | null;
+}
+
+export interface ProviderDetail extends ProviderRow {
+  offerings: Array<{
+    UpstreamModel: string;
+    CanonicalModelId?: string | null;
+    ContextWindow: number;
+    MaxOutputTokens: number;
+    supports_tools: boolean;
+    supports_reasoning: boolean;
+    input_price: number;
+    output_price: number;
+    Enabled: boolean;
+  }>;
+}
+
+export interface KeyConstraintsBody {
+  allowedModels?: string[];
+  allowedProviders?: string[];
+  allowedIpCidrs?: string[];
+  rpm?: number | null;
+  tpm?: number | null;
+  maxConcurrency?: number | null;
+  expiresAt?: string | null;
+}
+
+export interface EntitlementRow {
+  id: string;
+  subject_type: string;
+  subjectId?: string | null;
+  subject_label?: string | null;
+  providerId: string;
+  provider_alias?: string | null;
+  models: string[];
+  tokenQuota?: number | null;
+  costQuota?: number | null;
+  tokensUsed?: number | null;
+  expiresAt?: string | null;
+  createdAt: string;
+}
+
+export interface UpsertEntitlementBody {
+  id?: string | null;
+  subjectType: number;
+  subjectId?: string | null;
+  providerId: string;
+  models?: string[];
+  tokenQuota?: number | null;
+  costQuota?: number | null;
+  expiresAt?: string | null;
 }
 
 export interface MyProviderRow {
@@ -363,6 +462,7 @@ export interface KeyRow {
   is_revoked: boolean;
   created_at: string;
   expires_at?: string | null;
+  constraints?: string | null;
 }
 
 export interface MyKeyRow {

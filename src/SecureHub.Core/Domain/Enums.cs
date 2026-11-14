@@ -161,6 +161,14 @@ public static class AuditEventTypes
     public const string TeamUpdated = "team_updated";
     public const string AppCreated = "app_created";
     public const string AppUpdated = "app_updated";
+    public const string ProviderUpdated = "provider_updated";
+    public const string ProviderDisabled = "provider_disabled";
+    public const string ProviderTested = "provider_tested";
+    public const string ProviderCredentialRotated = "provider_credential_rotated";
+    public const string EntitlementUpdated = "entitlement_updated";
+    public const string EntitlementRevoked = "entitlement_revoked";
+    public const string KeyConstraintsUpdated = "key_constraints_updated";
+    public const string RateLimited = "rate_limited";
 }
 
 /// <summary>审计/错误原因码（机器可读，永不本地化）。</summary>

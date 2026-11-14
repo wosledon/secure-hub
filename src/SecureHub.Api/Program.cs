@@ -57,8 +57,8 @@ builder.Services.AddSingleton<AuditWriter>();
 builder.Services.AddSingleton<ProviderCredentialStore>();
 builder.Services.AddSingleton<PolicyStore>();
 builder.Services.AddScoped<BudgetGuard>();
-builder.Services.AddSingleton<CatalogSyncService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<CatalogSyncService>());
+builder.Services.AddSingleton<KeyRateLimiter>();
+builder.Services.AddSingleton<CatalogSyncService>();builder.Services.AddHostedService(sp => sp.GetRequiredService<CatalogSyncService>());
 builder.Services.AddScoped<ContentStore>();
 builder.Services.AddScoped<RedactionTokenStore>();
 builder.Services.AddScoped<RouteResolver>();
@@ -103,6 +103,9 @@ app.MapPolicies();
 app.MapAssistant();
 app.MapOrganization();
 app.MapCatalogOnboarding();
+app.MapProviderLifecycle();
+app.MapEntitlements();
+app.MapKeyConstraints();
 
 // SPA 回退：/admin、/me 等前端路由返回 index.html；
 // /api 与 /v1 下的未知路径保持 404，避免把 JSON 调用者导到 HTML。

@@ -91,10 +91,10 @@ public sealed class PersonalProviderOptions
 {
     public bool Enabled { get; set; } = true;
     public string[] AllowedProviders { get; set; } = [];
-    /// <summary>full | metadata | off</summary>
-    public string AuditLevel { get; set; } = "full";
     public Guid[] BlockedUsers { get; set; } = [];
 }
+
+// 员工流量（含 BYOK）的审计粒度固定为完整：正文必记录、不可配置降级。
 
 public sealed class AssistantOptions
 {

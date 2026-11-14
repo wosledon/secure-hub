@@ -116,7 +116,9 @@ public static class DataPlaneEndpoints
         var wantsStream = root?["stream"]?.GetValue<bool>() ?? false;
 
         // 3) 原文落盘（护栏之前，拦截也要可取证）
-        await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Raw, auth.AppId, bodyText, ct);
+        var mustRecord = auth.OwnerType == KeyOwnerType.User;
+        await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Raw, auth.AppId, bodyText,
+            force: mustRecord, ct: ct);
 
         // 4) 入向护栏 + 策略评估（动作取两者较严者）
         var texts = CollectTexts(root!);
@@ -174,11 +176,13 @@ public static class DataPlaneEndpoints
         {
             RedactInPlace(root!, verdict);
             bodyText = root!.ToJsonString();
-            await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Redacted, auth.AppId, bodyText, ct);
+            await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Redacted, auth.AppId, bodyText,
+                force: mustRecord, ct: ct);
         }
         else
         {
-            await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Redacted, auth.AppId, bodyText, ct);
+            await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Redacted, auth.AppId, bodyText,
+                force: mustRecord, ct: ct);
         }
 
         // 6) 压缩
@@ -192,7 +196,8 @@ public static class DataPlaneEndpoints
         var originalTokens = EstimateTokens(bodyText);
         var (compressedTexts, rolledBack) = CompressInPlace(root!, compressionSettings);
         var outboundBody = root!.ToJsonString();
-        await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Compressed, auth.AppId, outboundBody, ct);
+        await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Compressed, auth.AppId, outboundBody,
+            force: mustRecord, ct: ct);
 
         // 7) 路由
         var decision = await router.ResolveAsync(rawModel, auth.OwnerType, auth.OwnerId, auth.TeamId, ct);

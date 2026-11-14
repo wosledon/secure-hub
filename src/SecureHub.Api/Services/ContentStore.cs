@@ -20,10 +20,12 @@ public sealed class ContentStore(
         ContentVariant variant,
         Guid? appId,
         string text,
+        bool force = false,
         CancellationToken ct = default)
     {
         var settings = options.Value.Content;
-        if (!settings.PersistContent) return;
+        // force：员工流量（含 BYOK）必须落盘，不受全局开关影响。
+        if (!force && !settings.PersistContent) return;
 
         var truncated = false;
         if (text.Length > settings.MaxContentBytes)

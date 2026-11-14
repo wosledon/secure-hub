@@ -12,6 +12,7 @@ public sealed class SecureHubOptions
     public LoadBalancingOptions LoadBalancing { get; set; } = new();
     public LocalizationOptions Localization { get; set; } = new();
     public PersonalProviderOptions PersonalProviders { get; set; } = new();
+    public AssistantOptions Assistant { get; set; } = new();
 }
 
 public sealed class DatabaseOptions
@@ -93,4 +94,12 @@ public sealed class PersonalProviderOptions
     /// <summary>full | metadata | off</summary>
     public string AuditLevel { get; set; } = "full";
     public Guid[] BlockedUsers { get; set; } = [];
+}
+
+public sealed class AssistantOptions
+{
+    /// <summary>助手默认使用哪个模型（三级 ID 或裸名）；为空时取第一个可用 offering。</summary>
+    public string DefaultModel { get; set; } = string.Empty;
+    public int MaxRounds { get; set; } = 6;
+    public int MaxToolResultChars { get; set; } = 8_000;
 }

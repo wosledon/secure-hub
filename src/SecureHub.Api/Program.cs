@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using SecureHub.Api.Assistant;
 using SecureHub.Api.Auth;
 using SecureHub.Api.Endpoints;
 using SecureHub.Api.Services;
@@ -68,6 +69,7 @@ builder.Services.AddSingleton<CatalogSyncService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CatalogSyncService>());
 builder.Services.AddScoped<ContentStore>();
 builder.Services.AddScoped<RouteResolver>();
+builder.Services.AddScoped<AuditAssistant>();
 builder.Services.AddScoped<GuardrailPipeline>(_ => new GuardrailPipeline(
     [new PiiDetector(), new SecretDetector()],
     new GuardrailOptionsLike(
@@ -103,6 +105,7 @@ app.MapHealthChecks("/healthz");
 app.MapDataPlane();
 app.MapManagement();
 app.MapPolicies();
+app.MapAssistant();
 
 // SPA 回退：/admin、/me 等前端路由返回 index.html；
 // /api 与 /v1 下的未知路径保持 404，避免把 JSON 调用者导到 HTML。

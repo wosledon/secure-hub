@@ -3,7 +3,7 @@ namespace SecureHub.Core.Domain;
 /// <summary>虚拟密钥属主类型。</summary>
 public enum KeyOwnerType
 {
-    App = 0,
+    Organization = 0,
     User = 1
 }
 

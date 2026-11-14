@@ -127,7 +127,7 @@ export const api = {
   providerDetail: (id: string) => request<ProviderDetail>(`/api/admin/providers/${id}`),
 
   keys: () => request<KeyRow[]>('/api/admin/keys'),
-  createKey: (body: { displayName: string; ownerType: 0 | 1; ownerId: string; scopes?: string[] }) =>
+  createKey: (body: { displayName: string; ownerType: 0 | 1; ownerId: string; scopes?: string[]; appName?: string; teamId?: string | null }) =>
     request<{ key: string; key_id: string }>('/api/admin/keys', {
       method: 'POST',
       body: JSON.stringify(body)
@@ -135,11 +135,11 @@ export const api = {
   revokeKey: (id: string) =>
     request<{ ok: boolean }>(`/api/admin/keys/${id}/revoke`, { method: 'POST' }),
 
-  audit: (params?: { from?: string; to?: string; appId?: string; eventType?: string }) => {
+  audit: (params?: { from?: string; to?: string; app?: string; eventType?: string }) => {
     const search = new URLSearchParams();
     if (params?.from) search.set('from', params.from);
     if (params?.to) search.set('to', params.to);
-    if (params?.appId) search.set('appId', params.appId);
+    if (params?.app) search.set('app', params.app);
     if (params?.eventType) search.set('eventType', params.eventType);
     const query = search.toString();
     return request<{ count: number; data: AuditRow[] }>(`/api/admin/audit${query ? `?${query}` : ''}`);
@@ -148,10 +148,11 @@ export const api = {
     request<{ ok: boolean; checked_count: number; first_break_sequence: number | null }>(
       '/api/admin/audit/verify'
     ),
-  auditExportUrl: (params?: { from?: string; to?: string; limit?: number }) => {
+  auditExportUrl: (params?: { from?: string; to?: string; app?: string; limit?: number }) => {
     const search = new URLSearchParams();
     if (params?.from) search.set('from', params.from);
     if (params?.to) search.set('to', params.to);
+    if (params?.app) search.set('app', params.app);
     if (params?.limit) search.set('limit', String(params.limit));
     const query = search.toString();
     return `/api/admin/audit/export${query ? `?${query}` : ''}`;
@@ -204,8 +205,11 @@ export const api = {
       { method: 'POST' }
     ),
   myKeys: () => request<MyKeyRow[]>('/api/me/keys'),
-  createMyKey: () =>
-    request<{ key: string; key_id: string }>('/api/me/keys', { method: 'POST' }),
+  createMyKey: (appName?: string) =>
+    request<{ key: string; key_id: string }>(
+      `/api/me/keys${appName?.trim() ? `?appName=${encodeURIComponent(appName.trim())}` : ''}`,
+      { method: 'POST' }
+    ),
   revokeMyKey: (id: string) => request<{ ok: boolean }>(`/api/me/keys/${id}/revoke`, { method: 'POST' }),
   rotateMyKey: (id: string) =>
     request<{ key: string; key_id: string; replaced_key_id: string }>(`/api/me/keys/${id}/rotate`, { method: 'POST' }),
@@ -314,17 +318,6 @@ export const api = {
     }),
   updateTeam: (id: string, body: { name: string; isActive: boolean }) =>
     request<{ id: string; name: string; is_active: boolean }>(`/api/admin/org/teams/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(body)
-    }),
-  orgApps: () => request<OrgAppRow[]>('/api/admin/org/apps'),
-  createApp: (body: { name: string; teamId?: string | null }) =>
-    request<{ id: string; name: string; team_id?: string | null; is_active: boolean }>('/api/admin/org/apps', {
-      method: 'POST',
-      body: JSON.stringify(body)
-    }),
-  updateApp: (id: string, body: { name: string; teamId?: string | null; isActive: boolean }) =>
-    request<{ id: string; name: string; team_id?: string | null; is_active: boolean }>(`/api/admin/org/apps/${id}`, {
       method: 'PUT',
       body: JSON.stringify(body)
     }),
@@ -513,6 +506,8 @@ export interface KeyRow {
   display_name: string;
   owner_type: string;
   owner_id: string;
+  app_name?: string | null;
+  team_id?: string | null;
   is_revoked: boolean;
   created_at: string;
   expires_at?: string | null;
@@ -524,6 +519,7 @@ export interface MyKeyRow {
   key_id: string;
   prefix: string;
   display_name: string;
+  app_name?: string | null;
   is_revoked: boolean;
   created_at: string;
 }
@@ -537,6 +533,7 @@ export interface AuditRow {
   action: string;
   actorType: string;
   actorLabel: string;
+  app_name?: string | null;
   requestId?: string | null;
   modelAlias?: string | null;
   ruleId?: string | null;
@@ -693,17 +690,6 @@ export interface OrgTeamRow {
   is_active: boolean;
   createdAt: string;
   user_count: number;
-  app_count: number;
-}
-
-export interface OrgAppRow {
-  id: string;
-  name: string;
-  team_id?: string | null;
-  team_name?: string | null;
-  is_active: boolean;
-  createdAt: string;
-  key_count: number;
 }
 
 export interface OrgUserRow {

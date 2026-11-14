@@ -22,36 +22,6 @@ namespace SecureHub.Data.Migrations.Postgres
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("SecureHub.Core.Domain.App", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid?>("TeamId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.HasIndex("TeamId");
-
-                    b.ToTable("Apps");
-                });
-
             modelBuilder.Entity("SecureHub.Core.Domain.AssistantMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -177,6 +147,10 @@ namespace SecureHub.Data.Migrations.Postgres
                     b.Property<Guid?>("AppId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AppName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int>("BillingOwner")
                         .HasColumnType("integer");
 
@@ -279,6 +253,8 @@ namespace SecureHub.Data.Migrations.Postgres
                         .IsUnique();
 
                     b.HasIndex("AppId", "OccurredAt");
+
+                    b.HasIndex("AppName", "OccurredAt");
 
                     b.HasIndex("PolicyId", "RuleId");
 
@@ -463,8 +439,9 @@ namespace SecureHub.Data.Migrations.Postgres
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("AppId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("AppName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<byte[]>("CipherText")
                         .IsRequired()
@@ -515,7 +492,7 @@ namespace SecureHub.Data.Migrations.Postgres
 
                     b.HasIndex("ExpiresAt");
 
-                    b.HasIndex("AppId", "ExpiresAt");
+                    b.HasIndex("AppName", "ExpiresAt");
 
                     b.HasIndex("RequestId", "Direction", "Variant")
                         .IsUnique();
@@ -1017,8 +994,9 @@ namespace SecureHub.Data.Migrations.Postgres
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("AppId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("AppName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int>("BillingOwner")
                         .HasColumnType("integer");
@@ -1090,7 +1068,7 @@ namespace SecureHub.Data.Migrations.Postgres
 
                     b.HasIndex("ProviderId");
 
-                    b.HasIndex("AppId", "OccurredAt");
+                    b.HasIndex("AppName", "OccurredAt");
 
                     b.ToTable("UsageEvents");
                 });
@@ -1148,6 +1126,10 @@ namespace SecureHub.Data.Migrations.Postgres
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AppName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("ConstraintsJson")
                         .HasColumnType("text");
 
@@ -1195,7 +1177,12 @@ namespace SecureHub.Data.Migrations.Postgres
                         .IsRequired()
                         .HasColumnType("bytea");
 
+                    b.Property<Guid?>("TeamId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AppName");
 
                     b.HasIndex("KeyId")
                         .IsUnique();

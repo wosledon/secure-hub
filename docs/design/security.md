@@ -93,23 +93,17 @@ CREATE TABLE User (
   CreatedAt     TIMESTAMPTZ NOT NULL
 );
 
--- 应用
-CREATE TABLE App (
-  Id        UUID PRIMARY KEY,
-  Name      TEXT NOT NULL,
-  TeamId    UUID NULL,
-  CreatedAt TIMESTAMPTZ NOT NULL
-);
-
--- 虚拟密钥
+-- 虚拟密钥（应用/项目只是标签，不是独立实体）
 CREATE TABLE VirtualKey (
   Id            UUID PRIMARY KEY,
   KeyId         TEXT NOT NULL,          -- 8 hex，唯一，用于索引
   SecretHash    BYTEA NOT NULL,         -- SHA-256(secret)，32B
   Prefix        TEXT NOT NULL,          -- 前 12 字符（展示用）
   DisplayName   TEXT NOT NULL,
-  OwnerType     TEXT NOT NULL,          -- app | user
-  OwnerId       UUID NOT NULL,          -- App.Id 或 User.Id
+  OwnerType     TEXT NOT NULL,          -- org | user
+  OwnerId       UUID NOT NULL,          -- User.Id；企业密钥为全零
+  AppName       TEXT NULL,              -- 项目/软件标签，用于审计与用量
+  TeamId        UUID NULL,              -- 企业密钥的团队归属
   Scopes        TEXT NOT NULL,          -- JSON 数组
   Constraints   TEXT NULL,              -- JSON：allowedModels / allowedIpCidrs / rpm...
   Status        TEXT NOT NULL,          -- active | revoked
@@ -120,6 +114,7 @@ CREATE TABLE VirtualKey (
 );
 CREATE UNIQUE INDEX UX_VirtualKey_KeyId ON VirtualKey(KeyId);
 CREATE INDEX IX_VirtualKey_Owner ON VirtualKey(OwnerType, OwnerId);
+CREATE INDEX IX_VirtualKey_AppName ON VirtualKey(AppName);
 
 -- 供应商（企业级 / 个人级）
 CREATE TABLE Provider (
@@ -236,7 +231,8 @@ CREATE TABLE AuditEvent (
   ActorType      TEXT NOT NULL,         -- virtualKey | user | system | assistant
   ActorId        TEXT NOT NULL,
   ActorLabel     TEXT NOT NULL,
-  AppId          UUID NULL,
+  AppName        TEXT NULL,             -- 项目/软件标签；旧事件回退 ActorLabel
+  AppId          UUID NULL,             -- 仅保留用于历史链校验，新事件不写
   TeamId         UUID NULL,
   RequestId      TEXT NULL,
   ModelAlias     TEXT NULL,
@@ -263,7 +259,8 @@ CREATE TABLE AuditEvent (
 );
 CREATE UNIQUE INDEX UX_Audit_Sequence ON AuditEvent(Sequence);
 CREATE INDEX IX_Audit_OccurredAt ON AuditEvent(OccurredAt);
-CREATE INDEX IX_Audit_App_Time ON AuditEvent(AppId, OccurredAt);
+CREATE INDEX IX_Audit_App_Time ON AuditEvent(AppName, OccurredAt);
+CREATE INDEX IX_Audit_LegacyApp_Time ON AuditEvent(AppId, OccurredAt);
 CREATE INDEX IX_Audit_RequestId ON AuditEvent(RequestId);
 CREATE INDEX IX_Audit_PolicyRule ON AuditEvent(PolicyId, RuleId);
 ```
@@ -304,7 +301,7 @@ CREATE TABLE ContentBlob (
   RequestId    TEXT NOT NULL,
   Direction    TEXT NOT NULL,           -- request | response
   Variant      TEXT NOT NULL,           -- raw | redacted | compressed
-  AppId        UUID NULL,
+  AppName      TEXT NULL,               -- 项目/软件标签
   Ciphertext   BYTEA NOT NULL,
   DekId        TEXT NOT NULL,
   ContentHash  TEXT NOT NULL,           -- SHA-256(plaintext)，hex
@@ -314,7 +311,7 @@ CREATE TABLE ContentBlob (
   ExpiresAt    TIMESTAMPTZ NOT NULL
 );
 CREATE UNIQUE INDEX UX_Content ON ContentBlob(RequestId, Direction, Variant);
-CREATE INDEX IX_Content_App_Expire ON ContentBlob(AppId, ExpiresAt);
+CREATE INDEX IX_Content_App_Expire ON ContentBlob(AppName, ExpiresAt);
 
 CREATE TABLE ContentDek (
   DekId       TEXT PRIMARY KEY,         -- 如 k2026-11
@@ -499,7 +496,7 @@ public interface IGuardrailDetector
 }
 ```
 
-`DetectionContext` 只暴露：消息文本（只读切片）、模型、应用、策略参数。**不暴露**数据库上下文——检测器必须纯函数化，便于测试与并行。
+`DetectionContext` 只暴露：消息文本（只读切片）、模型、应用标签、策略参数。**不暴露**数据库上下文——检测器必须纯函数化，便于测试与并行。
 
 ### 6.2 执行
 
@@ -586,12 +583,13 @@ public sealed record TimeWindowCondition(DayOfWeek[] Days, TimeOnly From, TimeOn
 ```csharp
 static bool ScopeMatches(PolicyScope s, EvalContext c) =>
     MatchAny(s.Teams,   c.TeamId)    &&
-    MatchAny(s.Apps,    c.AppId)     &&
     MatchAny(s.Models,  c.ModelAlias) &&
     MatchAny(s.Environments, c.Environment);
 ```
 
 通配实现：仅支持前后缀 `*`（`app-*`、`*-prod`），用 `StartsWith/EndsWith` 实现，**不用正则**（防 ReDoS）。
+
+> 历史策略版本中的 `Apps` 字段仅为兼容旧策略保留；新策略不把应用标签作为作用域维度。
 
 ### 7.3 评估算法
 
@@ -798,7 +796,7 @@ FAIL at sequence 48213
 | ---- | ---------------------- | ---------------------------- | ---------------------------------- | --------------------------------------------- |
 | T-01 | 密钥爆破               | 高频 401                     | `auth_failed` 速率 / 同 IP 集中    | 自动封 IP 10 分钟 + critical 审计             |
 | T-02 | 密钥泄露               | 外部使用泄露的 sk-sh         | 来源 IP 与惯例不符、并发突增       | 告警 + 一键吊销；审计保留来源 IP              |
-| T-03 | 跨应用越权             | 用 A 应用密钥访问 B 应用数据 | `access_denied` 集中出现           | 403 + 告警；检查 RBAC 配置                    |
+| T-03 | 跨团队越权             | 用 A 团队密钥访问 B 团队数据 | `access_denied` 集中出现           | 403 + 告警；检查 RBAC 配置                    |
 | T-04 | 绕过网关               | 直接用上游 Key               | **账单对账**差异 > 5%              | 告警 + 排查 Key 分发渠道                      |
 | T-05 | 审计篡改               | UPDATE 审计行                | `verify` 断链；DB 权限异常         | 拒绝服务并告警（视为入侵）                    |
 | T-06 | 密文搬移               | 把 A 请求的密文改到 B 请求   | GCM 解密失败（AAD 不匹配）         | `content_decrypt_failed` 审计                 |

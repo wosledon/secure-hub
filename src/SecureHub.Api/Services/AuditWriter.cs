@@ -113,7 +113,49 @@ public sealed class AuditWriter
     public static string Canonicalize(AuditEvent e)
     {
         // 显式按固定顺序投影，避免匿名对象属性顺序变化导致哈希漂移。
-        var payload = new
+        // 旧事件没有 AppName，保持旧字段布局；新事件带应用标签时追加该字段。
+        // 这样历史审计链仍可用旧布局校验。
+        if (string.IsNullOrEmpty(e.AppName))
+        {
+            var legacy = new
+            {
+                e.EventId,
+                e.OccurredAt,
+                e.Sequence,
+                e.EventType,
+                e.Severity,
+                e.ActorType,
+                e.ActorId,
+                e.ActorLabel,
+                e.AppId,
+                e.TeamId,
+                e.RequestId,
+                e.ModelAlias,
+                e.ProviderId,
+                e.UpstreamModel,
+                e.ModelGroupId,
+                e.ModelMemberId,
+                e.Action,
+                e.PolicyId,
+                e.PolicyVersion,
+                e.RuleId,
+                e.ReasonCode,
+                e.Detail,
+                e.InputTokens,
+                e.InputTokensOriginal,
+                e.OutputTokens,
+                e.CostUsd,
+                e.IpAddress,
+                e.UserAgent,
+                e.ContentHash,
+                e.ContentMissing,
+                e.BillingOwner
+            };
+
+            return JsonSerializer.Serialize(legacy, CanonicalJson);
+        }
+
+        var current = new
         {
             e.EventId,
             e.OccurredAt,
@@ -124,6 +166,7 @@ public sealed class AuditWriter
             e.ActorId,
             e.ActorLabel,
             e.AppId,
+            e.AppName,
             e.TeamId,
             e.RequestId,
             e.ModelAlias,
@@ -148,7 +191,7 @@ public sealed class AuditWriter
             e.BillingOwner
         };
 
-        return JsonSerializer.Serialize(payload, CanonicalJson);
+        return JsonSerializer.Serialize(current, CanonicalJson);
     }
 
     public static string ComputeHash(string prevHash, string canonicalJson)

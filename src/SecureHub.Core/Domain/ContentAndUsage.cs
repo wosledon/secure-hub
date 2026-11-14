@@ -7,7 +7,7 @@ public sealed class ContentBlob
     public string RequestId { get; set; } = string.Empty;
     public ContentDirection Direction { get; set; }
     public ContentVariant Variant { get; set; }
-    public Guid? AppId { get; set; }
+    public string? AppName { get; set; }
     public byte[] CipherText { get; set; } = [];
     public byte[] Nonce { get; set; } = [];
     public byte[] Tag { get; set; } = [];
@@ -59,7 +59,7 @@ public sealed class UsageEvent
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public DateTimeOffset OccurredAt { get; set; }
-    public Guid? AppId { get; set; }
+    public string? AppName { get; set; }
     public Guid? TeamId { get; set; }
     public Guid? UserId { get; set; }
     public Guid? VirtualKeyId { get; set; }

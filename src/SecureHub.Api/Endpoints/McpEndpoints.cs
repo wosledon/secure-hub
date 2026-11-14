@@ -35,7 +35,7 @@ public static class McpEndpoints
         AuditWriter audit, IOptions<SecureHubOptions> options, CancellationToken ct)
     {
         var localizer = ApiLocalization.For(http, options);
-        var (auth, _) = await authenticator.AuthenticateAsync(BearerToken(http.Request), ct);
+        var (auth, _) = await authenticator.AuthenticateAsync(BearerToken(http.Request), ApiKeyAuthenticator.RequestAppName(http.Request), ct);
         if (auth is null)
         {
             await ApiError.Unauthorized(localizer).ExecuteAsync(http);
@@ -162,8 +162,18 @@ public static class McpEndpoints
         var limit = ReadInt(args, "limit", 20, 1, 200);
         var query = db.AuditEvents.AsNoTracking().AsQueryable();
 
-        if (auth.AppId is { } appId) query = query.Where(e => e.AppId == appId);
-        else query = query.Where(e => e.TeamId == auth.TeamId || e.ActorId == auth.OwnerId.ToString());
+        if (auth.OwnerType == KeyOwnerType.User)
+        {
+            query = query.Where(e => e.TeamId == auth.TeamId || e.ActorId == auth.OwnerId.ToString());
+        }
+        else if (auth.TeamId is { } teamId)
+        {
+            query = query.Where(e => e.TeamId == teamId);
+        }
+        else
+        {
+            query = query.Where(e => e.ActorType == "virtualKey" && e.ActorId == auth.VirtualKeyId.ToString());
+        }
 
         if (ReadString(args, "event_type") is { Length: > 0 } eventType)
         {
@@ -196,8 +206,18 @@ public static class McpEndpoints
         var from = DateTimeOffset.UtcNow.AddDays(-days);
         var query = db.UsageEvents.AsNoTracking().Where(e => e.OccurredAt >= from);
 
-        if (auth.AppId is { } appId) query = query.Where(e => e.AppId == appId);
-        else query = query.Where(e => e.TeamId == auth.TeamId || e.UserId == auth.OwnerId);
+        if (auth.OwnerType == KeyOwnerType.User)
+        {
+            query = query.Where(e => e.TeamId == auth.TeamId || e.UserId == auth.OwnerId);
+        }
+        else if (auth.TeamId is { } teamId)
+        {
+            query = query.Where(e => e.TeamId == teamId);
+        }
+        else
+        {
+            query = query.Where(e => e.VirtualKeyId == auth.VirtualKeyId);
+        }
 
         var rows = await query.ToListAsync(ct);
         return new

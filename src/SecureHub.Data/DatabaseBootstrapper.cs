@@ -36,14 +36,6 @@ public sealed class DatabaseBootstrapper(
         var team = new Team { Name = "Default", CreatedAt = DateTimeOffset.UtcNow };
         db.Teams.Add(team);
 
-        var app = new App
-        {
-            Name = "demo-app",
-            TeamId = team.Id,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-        db.Apps.Add(app);
-
         var generatedPassword = PasswordHasher.GeneratePassword();
         var admin = new User
         {

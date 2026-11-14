@@ -32,12 +32,11 @@ public class PolicyEvaluatorTests
 
     private static PolicyEvalContext Context(
         string[] detectors,
-        Guid? appId = null,
         int bucket = 0,
         string? model = "gpt-4o",
         string? appName = null,
         IReadOnlyDictionary<string, int>? counts = null) =>
-        new(appId, appName, null, null, model, detectors, bucket, new TimeOnly(10, 0), counts);
+        new(appName, null, null, model, detectors, bucket, new TimeOnly(10, 0), counts);
 
     [Theory]
     [InlineData("app-*", "app-1", true)]
@@ -105,16 +104,15 @@ public class PolicyEvaluatorTests
     }
 
     [Fact]
-    public void App_scope_falls_back_to_id_when_name_missing()
+    public void App_scope_does_not_match_when_name_missing()
     {
-        var appId = Guid.NewGuid();
-        var policy = Policy(apps: [$"{appId}"]);
+        var policy = Policy(apps: ["demo-app"]);
 
         Assert.Equal(GuardrailAction.Allow,
-            PolicyEvaluator.Evaluate([policy], Context(["pii.cn_idcard"], appId: Guid.NewGuid())).Action);
+            PolicyEvaluator.Evaluate([policy], Context(["pii.cn_idcard"])).Action);
 
         Assert.Equal(GuardrailAction.Block,
-            PolicyEvaluator.Evaluate([policy], Context(["pii.cn_idcard"], appId: appId)).Action);
+            PolicyEvaluator.Evaluate([policy], Context(["pii.cn_idcard"], appName: "demo-app")).Action);
     }
 
     [Fact]

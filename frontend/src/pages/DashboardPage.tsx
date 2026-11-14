@@ -290,7 +290,7 @@ export default function DashboardPage() {
                   <Box key={budget.id}>
                     <Stack direction="row" justifyContent="space-between" alignItems="baseline" spacing={1.5}>
                       <Typography variant="body2" fontWeight={600}>
-                        {budget.subject === 'org' ? t('usage.org') : budget.subject === 'team' ? t('usage.team') : t('usage.app')}
+                        {budget.subject === 'org' ? t('usage.org') : t('usage.team')}
                         {budget.subjectId ? ` · ${budget.subjectId.slice(0, 8)}` : ''}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">

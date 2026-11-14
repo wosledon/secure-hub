@@ -8,15 +8,6 @@ public sealed class Team
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-public sealed class App
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string Name { get; set; } = string.Empty;
-    public Guid? TeamId { get; set; }
-    public bool IsActive { get; set; } = true;
-    public DateTimeOffset CreatedAt { get; set; }
-}
-
 public sealed class User
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -80,6 +71,13 @@ public sealed class VirtualKey
     public string DisplayName { get; set; } = string.Empty;
     public KeyOwnerType OwnerType { get; set; }
     public Guid OwnerId { get; set; }
+
+    /// <summary>可选的项目/软件标签，仅用于审计与用量归属。</summary>
+    public string? AppName { get; set; }
+
+    /// <summary>企业密钥的团队归属。</summary>
+    public Guid? TeamId { get; set; }
+
     public string ScopesJson { get; set; } = "[]";
 
     /// <summary>JSON：allowedModels / allowedProviders / allowedIpCidrs / rpm / tpm / maxConcurrency。</summary>

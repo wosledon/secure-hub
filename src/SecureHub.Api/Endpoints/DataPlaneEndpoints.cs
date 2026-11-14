@@ -49,7 +49,7 @@ public static class DataPlaneEndpoints
 
         // 1) 认证
         var rawKey = BearerToken(http.Request);
-        var (auth, authError) = await authenticator.AuthenticateAsync(rawKey, ct);
+        var (auth, authError) = await authenticator.AuthenticateAsync(rawKey, ApiKeyAuthenticator.RequestAppName(http.Request), ct);
         if (auth is null)
         {
             await audit.AppendAsync(
@@ -91,18 +91,18 @@ public static class DataPlaneEndpoints
         }
 
         // 2) 读取与校验
-        var budget = await budgets.CheckAsync(auth.AppId, auth.TeamId, ct);
+        var budget = await budgets.CheckAsync(auth.TeamId, ct);
         if (!budget.Allowed)
         {
             await audit.AppendAsync(
-                AuditEventTypes.QuotaExceeded, auth.OwnerType == KeyOwnerType.App ? "app" : "user",
-                auth.OwnerId.ToString(), auth.Label, ReasonCodes.QuotaExceeded,
+                AuditEventTypes.QuotaExceeded, auth.AuditActorType,
+                auth.AuditActorId, auth.Label, ReasonCodes.QuotaExceeded,
                 action: GuardrailAction.Block, severity: AuditSeverity.Warning,
                 billingOwner: auth.Billing,
                 configure: e =>
                 {
                     e.RequestId = requestId;
-                    e.AppId = auth.AppId;
+                    e.AppName = auth.AppName;
                     e.TeamId = auth.TeamId;
                     e.Detail = JsonSerializer.Serialize(new
                     {
@@ -151,7 +151,7 @@ public static class DataPlaneEndpoints
 
         // 3) 原文落盘（护栏之前，拦截也要可取证）
         var mustRecord = auth.OwnerType == KeyOwnerType.User;
-        await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Raw, auth.AppId, bodyText,
+        await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Raw, auth.AppName, bodyText,
             force: mustRecord, ct: ct);
 
         // 4) 入向护栏 + 策略评估（动作取两者较严者）
@@ -168,13 +168,12 @@ public static class DataPlaneEndpoints
             .ToDictionary(g => g.Key, g => g.Sum(d => d.MatchCount), StringComparer.Ordinal);
 
         var policyDecision = PolicyEvaluator.Evaluate(policies.Snapshot, new PolicyEvalContext(
-            auth.AppId,
-            auth.OwnerType == KeyOwnerType.App ? auth.Label : null,
+            auth.AppName,
             auth.TeamId,
             null,
             rawModel,
             detectorIds,
-            PolicyStore.Bucket(auth.AppId, auth.VirtualKeyId),
+            PolicyStore.Bucket(auth.VirtualKeyId),
             TimeOnly.FromDateTime(DateTime.UtcNow),
             detectorCounts));
 
@@ -185,14 +184,14 @@ public static class DataPlaneEndpoints
         {
             var first = verdict.Detections.FirstOrDefault();
             await audit.AppendAsync(
-                AuditEventTypes.GuardrailBlocked, auth.OwnerType == KeyOwnerType.App ? "app" : "user",
-                auth.OwnerId.ToString(), auth.Label, ReasonCodes.PiiDetected,
+                AuditEventTypes.GuardrailBlocked, auth.AuditActorType,
+                auth.AuditActorId, auth.Label, ReasonCodes.PiiDetected,
                 action: GuardrailAction.Block, severity: AuditSeverity.Critical,
                 billingOwner: auth.Billing,
                 configure: e =>
                 {
                     e.RequestId = requestId;
-                    e.AppId = auth.AppId;
+                    e.AppName = auth.AppName;
                     e.TeamId = auth.TeamId;
                     e.RuleId = first?.RuleId ?? firstPolicy?.RuleId;
                     e.PolicyId = firstPolicy?.PolicyKey;
@@ -227,12 +226,12 @@ public static class DataPlaneEndpoints
             }
 
             bodyText = root!.ToJsonString();
-            await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Redacted, auth.AppId, bodyText,
+            await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Redacted, auth.AppName, bodyText,
                 force: mustRecord, ct: ct);
         }
         else
         {
-            await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Redacted, auth.AppId, bodyText,
+            await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Redacted, auth.AppName, bodyText,
                 force: mustRecord, ct: ct);
         }
 
@@ -247,7 +246,7 @@ public static class DataPlaneEndpoints
         var originalTokens = EstimateTokens(bodyText);
         var (compressedTexts, rolledBack) = CompressInPlace(root!, compressionSettings);
         var outboundBody = root!.ToJsonString();
-        await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Compressed, auth.AppId, outboundBody,
+        await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Compressed, auth.AppName, outboundBody,
             force: mustRecord, ct: ct);
 
         // 7) 路由
@@ -416,13 +415,13 @@ public static class DataPlaneEndpoints
             {
                 responseBody = restored;
                 await audit.AppendAsync(
-                    AuditEventTypes.ContentRestored, auth.OwnerType == KeyOwnerType.App ? "app" : "user",
-                    auth.OwnerId.ToString(), auth.Label, "ok",
+                    AuditEventTypes.ContentRestored, auth.AuditActorType,
+                    auth.AuditActorId, auth.Label, "ok",
                     billingOwner: auth.Billing,
                     configure: e =>
                     {
                         e.RequestId = requestId;
-                        e.AppId = auth.AppId;
+                        e.AppName = auth.AppName;
                         e.TeamId = auth.TeamId;
                         e.ModelAlias = rawModel;
                         e.ProviderId = provider.Id;
@@ -472,7 +471,7 @@ public static class DataPlaneEndpoints
         db.UsageEvents.Add(new UsageEvent
         {
             OccurredAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
-            AppId = auth.AppId,
+            AppName = auth.AppName,
             TeamId = auth.TeamId,
             UserId = auth.OwnerType == KeyOwnerType.User ? auth.OwnerId : null,
             VirtualKeyId = auth.VirtualKeyId,
@@ -491,20 +490,20 @@ public static class DataPlaneEndpoints
         });
 
         await db.SaveChangesAsync(ct);
-        await budgetGuard.AccumulateAsync(auth.AppId, auth.TeamId, inputTokens + outputTokens, cost, ct);
+        await budgetGuard.AccumulateAsync(auth.TeamId, inputTokens + outputTokens, cost, ct);
         rateLimiter.AddTokens(auth.VirtualKeyId, inputTokens + outputTokens);
 
         await audit.AppendAsync(
             AuditEventTypes.RouteSelected,
-            auth.OwnerType == KeyOwnerType.App ? "app" : "user",
-            auth.OwnerId.ToString(),
+            auth.AuditActorType,
+            auth.AuditActorId,
             auth.Label,
             compressionRolledBack ? ReasonCodes.CompressionRolledBack : "ok",
             billingOwner: decision.BillingOwner,
             configure: e =>
             {
                 e.RequestId = requestId;
-                e.AppId = auth.AppId;
+                e.AppName = auth.AppName;
                 e.TeamId = auth.TeamId;
                 e.ModelAlias = requestedModel;
                 e.ProviderId = providerId;
@@ -532,7 +531,7 @@ public static class DataPlaneEndpoints
         db.UsageEvents.Add(new UsageEvent
         {
             OccurredAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
-            AppId = auth.AppId,
+            AppName = auth.AppName,
             TeamId = auth.TeamId,
             UserId = auth.OwnerType == KeyOwnerType.User ? auth.OwnerId : null,
             VirtualKeyId = auth.VirtualKeyId,
@@ -561,7 +560,7 @@ public static class DataPlaneEndpoints
         CancellationToken ct)
     {
         var localizer = ApiLocalization.For(http, options);
-        var (auth, _) = await authenticator.AuthenticateAsync(BearerToken(http.Request), ct);
+        var (auth, _) = await authenticator.AuthenticateAsync(BearerToken(http.Request), ApiKeyAuthenticator.RequestAppName(http.Request), ct);
         if (auth is null)
         {
             await ApiError.Unauthorized(localizer).ExecuteAsync(http);

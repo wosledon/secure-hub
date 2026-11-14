@@ -10,7 +10,13 @@ public sealed class AuditEvent
     public string ActorType { get; set; } = "system";
     public string ActorId { get; set; } = string.Empty;
     public string ActorLabel { get; set; } = string.Empty;
+
+    /// <summary>历史应用 ID，仅保留用于旧审计链校验。</summary>
     public Guid? AppId { get; set; }
+
+    /// <summary>新审计事件的项目/软件标签。</summary>
+    public string? AppName { get; set; }
+
     public Guid? TeamId { get; set; }
     public string? RequestId { get; set; }
     public string? ModelAlias { get; set; }

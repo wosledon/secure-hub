@@ -51,7 +51,6 @@ public sealed record CompiledPolicy(
     string OnError);
 
 public sealed record PolicyEvalContext(
-    Guid? AppId,
     string? AppName,
     Guid? TeamId,
     string? TeamName,
@@ -108,9 +107,9 @@ public static class PolicyEvaluator
 
     public static bool ScopeMatches(PolicyScope scope, PolicyEvalContext context)
     {
-        // scope 中写的是人可读的名称（app-*、team-research）；缺名称时回退到 Id。
+        // scope 中写的是人可读的名称（app-*、team-research）；缺少名称时不匹配。
         if (!MatchesAny(scope.Teams, context.TeamName ?? context.TeamId?.ToString())) return false;
-        if (!MatchesAny(scope.Apps, context.AppName ?? context.AppId?.ToString())) return false;
+        if (!MatchesAny(scope.Apps, context.AppName)) return false;
         if (!MatchesAny(scope.Models, context.Model)) return false;
         return true;
     }

@@ -15,6 +15,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   Typography
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -358,7 +359,7 @@ function MyUsage() {
 
 function QuickStart({ model }: { model?: string }) {
   const { t } = useTranslation();
-  const code = `curl ${window.location.origin}/v1/chat/completions \\\n  -H "Authorization: Bearer $SECUREHUB_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "${model ?? 'me/<provider>/<model>'}",\n    "messages": [{"role":"user","content":"Hello"}]\n  }'`;
+  const code = `curl ${window.location.origin}/v1/chat/completions \\\n  -H "Authorization: Bearer $SECUREHUB_KEY" \\\n  -H "X-SecureHub-App: my-project" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "${model ?? 'me/<provider>/<model>'}",\n    "messages": [{"role":"user","content":"Hello"}]\n  }'`;
   return <Card><CardContent><Typography variant="h2" mb={0.5}>{t('me.quickStart')}</Typography><Typography variant="body2" color="text.secondary" mb={2}>{t('me.quickStartHint')}</Typography><CodeBlock code={code} /></CardContent></Card>;
 }
 
@@ -409,6 +410,7 @@ function MyKeys() {
   const [rows, setRows] = useState<MyKeyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [appName, setAppName] = useState('');
   const [secret, setSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -420,7 +422,7 @@ function MyKeys() {
   useEffect(() => { void load(); }, [load]);
   const create = async () => {
     setCreating(true); setError(null);
-    try { const result = await api.createMyKey(); localStorage.setItem(DEVKEY_STORAGE, result.key); setSecret(result.key); await load(); } catch (err) { setError((err as Error).message); } finally { setCreating(false); }
+    try { const result = await api.createMyKey(appName.trim() || undefined); localStorage.setItem(DEVKEY_STORAGE, result.key); setSecret(result.key); setAppName(''); await load(); } catch (err) { setError((err as Error).message); } finally { setCreating(false); }
   };
   const rotate = async (row: MyKeyRow) => {
     setBusyId(row.id); setError(null);
@@ -439,8 +441,8 @@ function MyKeys() {
   };
   return (
     <Stack spacing={3}>{error && <ErrorState message={error} retry={() => void load()} />}
-      <Card><CardContent sx={{ pb: '16px !important' }}><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'flex-start' }} spacing={2}><Box><Typography variant="h2">{t('me.keys')}</Typography><Typography variant="body2" color="text.secondary" mt={0.5}>{t('keys.description')}</Typography></Box><Button variant="contained" startIcon={<KeyIcon />} onClick={() => void create()} disabled={creating}>{creating ? t('common.working') : t('me.createMyKey')}</Button></Stack></CardContent>
-        {loading ? <TableSkeleton rows={4} columns={4} /> : rows.length === 0 ? <EmptyState title={t('me.keyEmpty')} action={<Button variant="contained" startIcon={<KeyIcon />} onClick={() => void create()}>{t('me.createFirst')}</Button>} /> : <Box sx={{ overflowX: 'auto' }}><Table>        <TableHead><TableRow><TableCell>{t('common.name')}</TableCell><TableCell>{t('keys.keyId')}</TableCell><TableCell>{t('keys.prefix')}</TableCell><TableCell>{t('common.createdAt')}</TableCell><TableCell>{t('common.status')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead><TableBody>{rows.map((row) => <TableRow key={row.id} hover sx={{ opacity: row.is_revoked ? 0.65 : 1 }}><TableCell><Typography variant="subtitle2">{row.display_name}</Typography></TableCell><TableCell><Box component="code">{row.key_id}</Box></TableCell><TableCell><Box component="code" fontSize={12}>{row.prefix}••••••••</Box></TableCell><TableCell>{format.dateTime(row.created_at)}</TableCell><TableCell><StatusChip status={row.is_revoked ? 'revoked' : 'active'} label={row.is_revoked ? t('common.revoked') : t('common.active')} /></TableCell><TableCell align="right"><Stack direction="row" spacing={0.5} justifyContent="flex-end"><Button size="small" disabled={row.is_revoked || busyId === row.id} onClick={() => void rotate(row)}>{t('me.rotateKey')}</Button><Button size="small" color="error" disabled={row.is_revoked} onClick={() => setRevokeTarget(row)}>{t('me.revokeKey')}</Button></Stack></TableCell></TableRow>)}</TableBody></Table></Box>}
+      <Card><CardContent sx={{ pb: '16px !important' }}><Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'flex-start' }} spacing={2}><Box><Typography variant="h2">{t('me.keys')}</Typography><Typography variant="body2" color="text.secondary" mt={0.5}>{t('keys.description')}</Typography></Box><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ width: { xs: '100%', sm: 'auto' } }}><TextField size="small" label={t('keys.appName')} value={appName} onChange={(event) => setAppName(event.target.value)} inputProps={{ maxLength: 100 }} sx={{ minWidth: { sm: 200 } }} /><Button variant="contained" startIcon={<KeyIcon />} onClick={() => void create()} disabled={creating}>{creating ? t('common.working') : t('me.createMyKey')}</Button></Stack></Stack></CardContent>
+        {loading ? <TableSkeleton rows={4} columns={5} /> : rows.length === 0 ? <EmptyState title={t('me.keyEmpty')} action={<Button variant="contained" startIcon={<KeyIcon />} onClick={() => void create()}>{t('me.createFirst')}</Button>} /> : <Box sx={{ overflowX: 'auto' }}><Table>        <TableHead><TableRow><TableCell>{t('common.name')}</TableCell><TableCell>{t('keys.appName')}</TableCell><TableCell>{t('keys.keyId')}</TableCell><TableCell>{t('keys.prefix')}</TableCell><TableCell>{t('common.createdAt')}</TableCell><TableCell>{t('common.status')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead><TableBody>{rows.map((row) => <TableRow key={row.id} hover sx={{ opacity: row.is_revoked ? 0.65 : 1 }}><TableCell><Typography variant="subtitle2">{row.display_name}</Typography></TableCell><TableCell>{row.app_name ? <Chip size="small" variant="outlined" label={row.app_name} /> : '—'}</TableCell><TableCell><Box component="code">{row.key_id}</Box></TableCell><TableCell><Box component="code" fontSize={12}>{row.prefix}••••••••</Box></TableCell><TableCell>{format.dateTime(row.created_at)}</TableCell><TableCell><StatusChip status={row.is_revoked ? 'revoked' : 'active'} label={row.is_revoked ? t('common.revoked') : t('common.active')} /></TableCell><TableCell align="right"><Stack direction="row" spacing={0.5} justifyContent="flex-end"><Button size="small" disabled={row.is_revoked || busyId === row.id} onClick={() => void rotate(row)}>{t('me.rotateKey')}</Button><Button size="small" color="error" disabled={row.is_revoked} onClick={() => setRevokeTarget(row)}>{t('me.revokeKey')}</Button></Stack></TableCell></TableRow>)}</TableBody></Table></Box>}
       </Card><QuickStart /><SecretDialog open={!!secret} secret={secret ?? ''} onClose={() => setSecret(null)} />
               <ConfirmDialog open={!!revokeTarget} title={t('me.revokeKey')} description={t('me.revokeKeyHint', { name: revokeTarget?.display_name ?? '' })} confirmLabel={t('me.revokeKey')} busy={!!busyId} danger onClose={() => setRevokeTarget(null)} onConfirm={() => void revoke()} />
     </Stack>

@@ -20,7 +20,7 @@ public sealed class ContentStore(
         string requestId,
         ContentDirection direction,
         ContentVariant variant,
-        Guid? appId,
+        string? appName,
         string text,
         bool force = false,
         CancellationToken ct = default)
@@ -49,7 +49,7 @@ public sealed class ContentStore(
             RequestId = requestId,
             Direction = direction,
             Variant = variant,
-            AppId = appId,
+            AppName = appName,
             CipherText = cipherBytes,
             Nonce = nonce,
             Tag = tag,

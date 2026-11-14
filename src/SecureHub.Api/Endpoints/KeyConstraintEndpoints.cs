@@ -163,6 +163,8 @@ public static class KeyConstraintEndpoints
             DisplayName = key.DisplayName,
             OwnerType = KeyOwnerType.User,
             OwnerId = key.OwnerId,
+            AppName = key.AppName,
+            TeamId = key.TeamId,
             ScopesJson = key.ScopesJson,
             ConstraintsJson = key.ConstraintsJson,
             ExpiresAt = key.ExpiresAt,

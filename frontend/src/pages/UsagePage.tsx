@@ -109,15 +109,12 @@ export default function UsagePage() {
 
   const subjectLabel = (subject: string | number) => {
     const value = String(subject).toLowerCase();
-    if (value === '0' || value.includes('org') || value.includes('all')) return t('usage.org');
     if (value === '1' || value.includes('team')) return t('usage.team');
-    return t('usage.app');
+    return t('usage.org');
   };
   const budgetSubjectValue = (subject: string | number) => {
     const value = String(subject).toLowerCase();
-    if (value.includes('team') || value === '1') return 1;
-    if (value.includes('app') || value === '2') return 2;
-    return 0;
+    return value.includes('team') || value === '1' ? 1 : 0;
   };
 
   return (
@@ -227,7 +224,7 @@ export default function UsagePage() {
       </Box>
 
       <Dialog open={open} onClose={busy ? undefined : () => setOpen(false)} fullWidth maxWidth="sm"><DialogTitle>{t('usage.addBudget')}</DialogTitle><DialogContent><Stack spacing={2.25} mt={1}>
-        <TextField select label={t('usage.subject')} value={form.subject} onChange={(event) => setForm({ ...form, subject: Number(event.target.value) })}><MenuItem value={0}>{t('usage.org')}</MenuItem><MenuItem value={1}>{t('usage.team')}</MenuItem><MenuItem value={2}>{t('usage.app')}</MenuItem></TextField>
+        <TextField select label={t('usage.subject')} value={form.subject} onChange={(event) => setForm({ ...form, subject: Number(event.target.value) })}><MenuItem value={0}>{t('usage.org')}</MenuItem><MenuItem value={1}>{t('usage.team')}</MenuItem></TextField>
         {form.subject !== 0 && <TextField label={t('keys.ownerId')} value={form.subjectId} onChange={(event) => setForm({ ...form, subjectId: event.target.value })} helperText={t('usage.subjectIdHint')} autoComplete="off" required />}
         <TextField select label={t('usage.period')} value={form.period} onChange={(event) => setForm({ ...form, period: event.target.value })}><MenuItem value="day">{t('usage.day')}</MenuItem><MenuItem value="week">{t('usage.week')}</MenuItem><MenuItem value="month">{t('usage.month')}</MenuItem></TextField>
         <TextField type="number" label={t('usage.tokenLimit')} value={form.tokenLimit} onChange={(event) => setForm({ ...form, tokenLimit: event.target.value })} inputProps={{ min: 0 }} />

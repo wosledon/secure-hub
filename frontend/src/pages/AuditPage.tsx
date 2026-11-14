@@ -66,7 +66,7 @@ export default function AuditPage() {
 
   const filters = useMemo(() => ({
     from: searchParams.get('from') ?? '', to: searchParams.get('to') ?? '',
-    appId: searchParams.get('appId') ?? '', eventType: searchParams.get('eventType') ?? ''
+    app: searchParams.get('app') ?? '', eventType: searchParams.get('eventType') ?? ''
   }), [searchParams]);
   const [form, setForm] = useState(filters);
   useEffect(() => setForm(filters), [filters]);
@@ -83,7 +83,7 @@ export default function AuditPage() {
   const queryParams = useCallback((range = form) => ({
     from: range.from ? `${range.from}T00:00:00Z` : undefined,
     to: range.to ? `${range.to}T23:59:59Z` : undefined,
-    appId: range.appId || undefined,
+    app: range.app || undefined,
     eventType: range.eventType || undefined
   }), [form]);
 
@@ -94,7 +94,7 @@ export default function AuditPage() {
       const result = await api.audit({
         from: filters.from ? `${filters.from}T00:00:00Z` : undefined,
         to: filters.to ? `${filters.to}T23:59:59Z` : undefined,
-        appId: filters.appId || undefined, eventType: filters.eventType || undefined
+        app: filters.app || undefined, eventType: filters.eventType || undefined
       });
       setRows(result.data);
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
@@ -107,7 +107,7 @@ export default function AuditPage() {
     Object.entries(form).forEach(([key, value]) => { if (value) next[key] = value; });
     setSearchParams(next);
   };
-  const reset = () => { setForm({ from: '', to: '', appId: '', eventType: '' }); setSearchParams({}); };
+  const reset = () => { setForm({ from: '', to: '', app: '', eventType: '' }); setSearchParams({}); };
   const openDetails = (row: AuditRow) => {
     const next = new URLSearchParams(searchParams);
     next.set('event', row.eventId);
@@ -191,15 +191,15 @@ export default function AuditPage() {
               </MenuItem>
             ))}
           </TextField>
-          <TextField size="small" label={t('audit.appId')} value={form.appId} onChange={(event) => setForm({ ...form, appId: event.target.value })} name="appId" autoComplete="off" />
+          <TextField size="small" label={t('audit.app')} value={form.app} onChange={(event) => setForm({ ...form, app: event.target.value })} name="app" autoComplete="off" />
           <TextField size="small" type="date" label={t('audit.from')} value={form.from} onChange={(event) => setForm({ ...form, from: event.target.value })} InputLabelProps={{ shrink: true }} />
           <TextField size="small" type="date" label={t('audit.to')} value={form.to} onChange={(event) => setForm({ ...form, to: event.target.value })} InputLabelProps={{ shrink: true }} />
           <Stack direction="row" spacing={1}><Button type="submit" variant="contained" startIcon={<SearchIcon />}>{t('audit.apply')}</Button><Button onClick={reset}>{t('audit.reset')}</Button></Stack>
         </Box>
         <Stack direction="row" justifyContent="space-between" alignItems="center" px={2.5} py={1.5}><Typography variant="body2" color="text.secondary">{t('common.results', { count: rows.length })}</Typography><Typography variant="caption" color="text.secondary">{t('audit.exportHint')}</Typography></Stack>
-        {loading ? <TableSkeleton rows={8} columns={7} /> : rows.length === 0 ? <EmptyState title={t('audit.empty')} description={t('audit.emptyHint')} /> : (
+        {loading ? <TableSkeleton rows={8} columns={9} /> : rows.length === 0 ? <EmptyState title={t('audit.empty')} description={t('audit.emptyHint')} /> : (
           <Box sx={{ overflowX: 'auto' }}><Table size="small">
-            <TableHead><TableRow><TableCell>#</TableCell><TableCell>{t('audit.time')}</TableCell><TableCell>{t('audit.event')}</TableCell><TableCell>{t('audit.action')}</TableCell><TableCell>{t('audit.actor')}</TableCell><TableCell>{t('audit.model')}</TableCell><TableCell align="right">{t('audit.tokensInOut')}</TableCell><TableCell>{t('table.billing')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>#</TableCell><TableCell>{t('audit.time')}</TableCell><TableCell>{t('audit.event')}</TableCell><TableCell>{t('audit.action')}</TableCell><TableCell>{t('audit.actor')}</TableCell><TableCell>{t('audit.app')}</TableCell><TableCell>{t('audit.model')}</TableCell><TableCell align="right">{t('audit.tokensInOut')}</TableCell><TableCell>{t('table.billing')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead>
             <TableBody>{visible.map((row) => (
               <TableRow key={row.eventId} hover onClick={() => openDetails(row)} sx={{ cursor: 'pointer' }} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetails(row); } }}>
                 <TableCell sx={{ fontVariantNumeric: 'tabular-nums' }}>{row.sequence}</TableCell><TableCell sx={{ whiteSpace: 'nowrap' }}>{format.dateTime(row.occurredAt)}</TableCell>
@@ -209,6 +209,7 @@ export default function AuditPage() {
                   {row.reasonCode && row.reasonCode !== 'ok' && <Typography variant="caption" color="text.secondary" display="block">{labels.reason(row.reasonCode)}</Typography>}
                 </TableCell>
                 <TableCell><StatusChip status={row.action} label={labels.action(row.action)} /></TableCell><TableCell>{row.actorLabel}</TableCell>
+                <TableCell>{row.app_name ? <Chip size="small" variant="outlined" label={row.app_name} /> : '—'}</TableCell>
                 <TableCell sx={{ maxWidth: 220 }}><Box component="code" sx={{ fontSize: 11, wordBreak: 'break-all' }}>{row.modelAlias ?? '—'}</Box></TableCell>
                 <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>{row.inputTokens != null || row.outputTokens != null ? `${format.number(row.inputTokens ?? 0)} / ${format.number(row.outputTokens ?? 0)}` : '—'}</TableCell>
                 <TableCell><StatusChip status={row.billing_owner} label={labels.billing(row.billing_owner)} /></TableCell>
@@ -254,6 +255,7 @@ export default function AuditPage() {
             </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 1.5 }}>
               <DetailLabel>{t('audit.actor')}</DetailLabel><DetailValue>{selected.actorLabel} · {labels.actorType(selected.actorType)}</DetailValue>
+              <DetailLabel>{t('audit.app')}</DetailLabel><DetailValue>{selected.app_name ?? '—'}</DetailValue>
               <DetailLabel>{t('audit.requestId')}</DetailLabel><DetailValue code>{selected.requestId ?? '—'}</DetailValue>
               <DetailLabel>{t('audit.model')}</DetailLabel><DetailValue code>{selected.modelAlias ?? '—'}</DetailValue>
               <DetailLabel>{t('audit.reason')}</DetailLabel><DetailValue>{selected.reasonCode ? `${labels.reason(selected.reasonCode)} · ${selected.reasonCode}` : '—'}</DetailValue>

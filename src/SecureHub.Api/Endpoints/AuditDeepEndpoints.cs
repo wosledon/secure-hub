@@ -144,7 +144,7 @@ public static class AuditDeepEndpoints
             "ok", severity: AuditSeverity.Warning, configure: e =>
             {
                 e.RequestId = blob.RequestId;
-                e.AppId = blob.AppId;
+                e.AppName = blob.AppName;
                 e.Detail = JsonSerializer.Serialize(new
                 {
                     content_id = blob.ContentId,

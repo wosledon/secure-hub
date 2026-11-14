@@ -30,7 +30,6 @@ public static class UsageInsightsEndpoints
             .ToListAsync(ct);
 
         var teams = await db.Teams.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t.Name, ct);
-        var apps = await db.Apps.AsNoTracking().ToDictionaryAsync(a => a.Id, a => a.Name, ct);
         var providers = await db.Providers.AsNoTracking().ToDictionaryAsync(p => p.Id, p => p.Alias, ct);
 
         var totals = new
@@ -75,11 +74,10 @@ public static class UsageInsightsEndpoints
                 })
                 .OrderByDescending(x => x.requests),
             by_app = events
-                .GroupBy(e => e.AppId)
+                .GroupBy(e => e.AppName)
                 .Select(g => new
                 {
-                    app_id = g.Key,
-                    name = g.Key is { } appId ? apps.GetValueOrDefault(appId) ?? "unknown" : "unassigned",
+                    name = string.IsNullOrWhiteSpace(g.Key) ? "unassigned" : g.Key,
                     requests = g.Count(),
                     input_tokens = g.Sum(x => (long)x.InputTokens),
                     output_tokens = g.Sum(x => (long)x.OutputTokens),

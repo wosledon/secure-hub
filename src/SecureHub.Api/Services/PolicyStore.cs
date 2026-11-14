@@ -92,10 +92,10 @@ public sealed class PolicyStore(IServiceScopeFactory scopeFactory, ILogger<Polic
         return JsonSerializer.Deserialize<T>(json, Json);
     }
 
-    /// <summary>灰度分桶：同 (app, key) 结果稳定。</summary>
-    public static int Bucket(Guid? appId, Guid keyId)
+    /// <summary>灰度分桶：同 key 结果稳定。</summary>
+    public static int Bucket(Guid keyId)
     {
-        var payload = $"{appId}:{keyId}";
+        var payload = keyId.ToString();
         var bytes = System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(payload));
         return (BitConverter.ToInt32(bytes, 0) & 0x7FFFFFFF) % 100;

@@ -38,11 +38,11 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api';
-import type { OrgAppRow, OrgTeamRow, OrgUserRow } from '../api';
+import type { OrgTeamRow, OrgUserRow } from '../api';
 import { ConfirmDialog, EmptyState, ErrorState, PageHeader, StatusChip, TableSkeleton } from '../components/ui';
 import { useFormatters } from '../utils/format';
 
-const tabs = ['users', 'teams', 'apps'] as const;
+const tabs = ['users', 'teams'] as const;
 const allRoles = [0, 1, 2, 3, 4, 5];
 
 export default function OrganizationPage() {
@@ -50,14 +50,12 @@ export default function OrganizationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<OrgUserRow[]>([]);
   const [teams, setTeams] = useState<OrgTeamRow[]>([]);
-  const [apps, setApps] = useState<OrgAppRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [userDialog, setUserDialog] = useState<{ mode: 'create' } | { mode: 'edit'; user: OrgUserRow } | null>(null);
   const [teamDialog, setTeamDialog] = useState<{ mode: 'create' } | { mode: 'edit'; team: OrgTeamRow } | null>(null);
-  const [appDialog, setAppDialog] = useState<{ mode: 'create' } | { mode: 'edit'; app: OrgAppRow } | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<OrgUserRow | null>(null);
 
   const active = tabs.includes(searchParams.get('tab') as typeof tabs[number]) ? searchParams.get('tab')! : 'users';
@@ -66,10 +64,9 @@ export default function OrganizationPage() {
     setLoading(true);
     setError(null);
     try {
-      const [userRows, teamRows, appRows] = await Promise.all([api.orgUsers(), api.orgTeams(), api.orgApps()]);
+      const [userRows, teamRows] = await Promise.all([api.orgUsers(), api.orgTeams()]);
       setUsers(userRows);
       setTeams(teamRows);
-      setApps(appRows);
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -77,7 +74,6 @@ export default function OrganizationPage() {
   const search = query.trim().toLowerCase();
   const filteredUsers = useMemo(() => users.filter((user) => !search || `${user.userName} ${user.team_name ?? ''}`.toLowerCase().includes(search)), [users, search]);
   const filteredTeams = useMemo(() => teams.filter((team) => !search || team.name.toLowerCase().includes(search)), [teams, search]);
-  const filteredApps = useMemo(() => apps.filter((app) => !search || `${app.name} ${app.team_name ?? ''}`.toLowerCase().includes(search)), [apps, search]);
 
   return (
     <Stack spacing={3}>
@@ -86,9 +82,9 @@ export default function OrganizationPage() {
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => active === 'users' ? setUserDialog({ mode: 'create' }) : active === 'teams' ? setTeamDialog({ mode: 'create' }) : setAppDialog({ mode: 'create' })}
+          onClick={() => active === 'users' ? setUserDialog({ mode: 'create' }) : setTeamDialog({ mode: 'create' })}
         >
-          {active === 'users' ? t('org.addUser') : active === 'teams' ? t('org.addTeam') : t('org.addApp')}
+          {active === 'users' ? t('org.addUser') : t('org.addTeam')}
         </Button>
       </>} />
       {error && <ErrorState message={error} retry={() => void load()} />}
@@ -97,20 +93,17 @@ export default function OrganizationPage() {
       <Tabs value={active} onChange={(_, value) => setSearchParams(value === 'users' ? {} : { tab: value })} sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tab value="users" label={`${t('org.users')} (${users.length})`} />
         <Tab value="teams" label={`${t('org.teams')} (${teams.length})`} />
-        <Tab value="apps" label={`${t('org.apps')} (${apps.length})`} />
       </Tabs>
 
       <Card>
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Typography variant="h2" sx={{ flexGrow: 1 }}>{active === 'users' ? t('org.users') : active === 'teams' ? t('org.teams') : t('org.apps')}</Typography>
+          <Typography variant="h2" sx={{ flexGrow: 1 }}>{active === 'users' ? t('org.users') : t('org.teams')}</Typography>
           <TextField size="small" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('org.search')} name="orgSearch" autoComplete="off" sx={{ width: { xs: '100%', sm: 300 } }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }} />
         </Box>
         {loading ? <TableSkeleton rows={6} columns={5} /> : active === 'users' ? (
           filteredUsers.length === 0 ? <EmptyState title={t('org.emptyUsers')} description={t('org.emptyUsersHint')} /> : <UsersTable rows={filteredUsers} onEdit={(user) => setUserDialog({ mode: 'edit', user })} onResetPassword={setPasswordTarget} />
-        ) : active === 'teams' ? (
-          filteredTeams.length === 0 ? <EmptyState title={t('org.emptyTeams')} description={t('org.emptyTeamsHint')} /> : <TeamsTable rows={filteredTeams} onEdit={(team) => setTeamDialog({ mode: 'edit', team })} />
         ) : (
-          filteredApps.length === 0 ? <EmptyState title={t('org.emptyApps')} description={t('org.emptyAppsHint')} /> : <AppsTable rows={filteredApps} onEdit={(app) => setAppDialog({ mode: 'edit', app })} />
+          filteredTeams.length === 0 ? <EmptyState title={t('org.emptyTeams')} description={t('org.emptyTeamsHint')} /> : <TeamsTable rows={filteredTeams} onEdit={(team) => setTeamDialog({ mode: 'edit', team })} />
         )}
       </Card>
 
@@ -127,14 +120,6 @@ export default function OrganizationPage() {
           state={teamDialog}
           onClose={() => setTeamDialog(null)}
           onSaved={(text) => { setTeamDialog(null); setMessage(text); void load(); }}
-        />
-      )}
-      {appDialog && (
-        <AppDialog
-          state={appDialog}
-          teams={teams}
-          onClose={() => setAppDialog(null)}
-          onSaved={(text) => { setAppDialog(null); setMessage(text); void load(); }}
         />
       )}
       {passwordTarget && (
@@ -184,35 +169,14 @@ function TeamsTable({ rows, onEdit }: { rows: OrgTeamRow[]; onEdit: (team: OrgTe
   return (
     <Box sx={{ overflowX: 'auto' }}>
       <Table>
-        <TableHead><TableRow><TableCell>{t('common.name')}</TableCell><TableCell align="right">{t('org.users')}</TableCell><TableCell align="right">{t('org.apps')}</TableCell><TableCell>{t('common.status')}</TableCell><TableCell>{t('common.createdAt')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead>
+        <TableHead><TableRow><TableCell>{t('common.name')}</TableCell><TableCell align="right">{t('org.users')}</TableCell><TableCell>{t('common.status')}</TableCell><TableCell>{t('common.createdAt')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead>
         <TableBody>{rows.map((team) => (
           <TableRow key={team.id} hover sx={{ opacity: team.is_active ? 1 : 0.6 }}>
             <TableCell><Stack direction="row" spacing={1.25} alignItems="center"><GroupsOutlinedIcon color="action" fontSize="small" /><Typography variant="subtitle2">{team.name}</Typography></Stack></TableCell>
-            <TableCell align="right">{team.user_count}</TableCell><TableCell align="right">{team.app_count}</TableCell>
+            <TableCell align="right">{team.user_count}</TableCell>
             <TableCell><StatusChip status={team.is_active ? 'active' : 'disabled'} label={team.is_active ? t('common.enabled') : t('common.disabled')} /></TableCell>
             <TableCell>{format.dateTime(team.createdAt)}</TableCell>
             <TableCell align="right"><Tooltip title={t('common.configure')}><IconButton size="small" onClick={() => onEdit(team)} aria-label={t('common.configure')}><EditOutlinedIcon fontSize="small" /></IconButton></Tooltip></TableCell>
-          </TableRow>
-        ))}</TableBody>
-      </Table>
-    </Box>
-  );
-}
-
-function AppsTable({ rows, onEdit }: { rows: OrgAppRow[]; onEdit: (app: OrgAppRow) => void }) {
-  const { t } = useTranslation();
-  const format = useFormatters();
-  return (
-    <Box sx={{ overflowX: 'auto' }}>
-      <Table>
-        <TableHead><TableRow><TableCell>{t('common.name')}</TableCell><TableCell>{t('account.team')}</TableCell><TableCell align="right">{t('nav.keys')}</TableCell><TableCell>{t('common.status')}</TableCell><TableCell>{t('common.createdAt')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead>
-        <TableBody>{rows.map((app) => (
-          <TableRow key={app.id} hover sx={{ opacity: app.is_active ? 1 : 0.6 }}>
-            <TableCell><Typography variant="subtitle2">{app.name}</Typography></TableCell>
-            <TableCell>{app.team_name ?? '—'}</TableCell><TableCell align="right">{app.key_count}</TableCell>
-            <TableCell><StatusChip status={app.is_active ? 'active' : 'disabled'} label={app.is_active ? t('common.enabled') : t('common.disabled')} /></TableCell>
-            <TableCell>{format.dateTime(app.createdAt)}</TableCell>
-            <TableCell align="right"><Tooltip title={t('common.configure')}><IconButton size="small" onClick={() => onEdit(app)} aria-label={t('common.configure')}><EditOutlinedIcon fontSize="small" /></IconButton></Tooltip></TableCell>
           </TableRow>
         ))}</TableBody>
       </Table>
@@ -315,47 +279,6 @@ function TeamDialog({ state, onClose, onSaved }: {
       <DialogTitle>{editing ? t('org.editTeam') : t('org.addTeam')}</DialogTitle>
       <DialogContent><Stack spacing={2.25} mt={1}>
         <TextField label={t('common.name')} value={name} onChange={(event) => setName(event.target.value)} name="teamName" autoComplete="off" required />
-        {editing && <FormControlLabel control={<Switch checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />} label={t('common.enabled')} />}
-        {error && <Alert severity="error">{error}</Alert>}
-      </Stack></DialogContent>
-      <DialogActions><Button onClick={onClose} disabled={busy}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => void submit()} disabled={busy || !name.trim()}>{busy ? t('common.working') : t('common.save')}</Button></DialogActions>
-    </Dialog>
-  );
-}
-
-function AppDialog({ state, teams, onClose, onSaved }: {
-  state: { mode: 'create' } | { mode: 'edit'; app: OrgAppRow };
-  teams: OrgTeamRow[];
-  onClose: () => void;
-  onSaved: (message: string) => void;
-}) {
-  const { t } = useTranslation();
-  const editing = state.mode === 'edit' ? state.app : null;
-  const [name, setName] = useState(editing?.name ?? '');
-  const [teamId, setTeamId] = useState(editing?.team_id ?? '');
-  const [isActive, setIsActive] = useState(editing?.is_active ?? true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async () => {
-    setBusy(true); setError(null);
-    try {
-      if (editing) {
-        await api.updateApp(editing.id, { name: name.trim(), teamId: teamId || null, isActive });
-        onSaved(t('org.appUpdated'));
-      } else {
-        await api.createApp({ name: name.trim(), teamId: teamId || null });
-        onSaved(t('org.appCreated'));
-      }
-    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
-  };
-
-  return (
-    <Dialog open onClose={busy ? undefined : onClose} fullWidth maxWidth="xs">
-      <DialogTitle>{editing ? t('org.editApp') : t('org.addApp')}</DialogTitle>
-      <DialogContent><Stack spacing={2.25} mt={1}>
-        <TextField label={t('common.name')} value={name} onChange={(event) => setName(event.target.value)} name="appName" autoComplete="off" required />
-        <TextField select label={t('account.team')} value={teamId} onChange={(event) => setTeamId(event.target.value)}><MenuItem value="">{t('org.noTeam')}</MenuItem>{teams.filter((team) => team.is_active).map((team) => <MenuItem key={team.id} value={team.id}>{team.name}</MenuItem>)}</TextField>
         {editing && <FormControlLabel control={<Switch checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />} label={t('common.enabled')} />}
         {error && <Alert severity="error">{error}</Alert>}
       </Stack></DialogContent>

@@ -20,7 +20,6 @@ public class SecureHubDbContext : DbContext
     {
     }
     public DbSet<Team> Teams => Set<Team>();
-    public DbSet<App> Apps => Set<App>();
     public DbSet<User> Users => Set<User>();
     public DbSet<VirtualKey> VirtualKeys => Set<VirtualKey>();
     public DbSet<Provider> Providers => Set<Provider>();
@@ -64,14 +63,6 @@ public class SecureHubDbContext : DbContext
             e.HasIndex(x => x.Name).IsUnique();
         });
 
-        b.Entity<App>(e =>
-        {
-            e.HasKey(x => x.Id);
-            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
-            e.HasIndex(x => x.Name).IsUnique();
-            e.HasIndex(x => x.TeamId);
-        });
-
         b.Entity<User>(e =>
         {
             e.HasKey(x => x.Id);
@@ -90,8 +81,10 @@ public class SecureHubDbContext : DbContext
             e.HasIndex(x => x.KeyId).IsUnique();
             e.Property(x => x.Prefix).HasMaxLength(32).IsRequired();
             e.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
+            e.Property(x => x.AppName).HasMaxLength(100);
             e.Property(x => x.SecretHash).IsRequired();
             e.HasIndex(x => new { x.OwnerType, x.OwnerId });
+            e.HasIndex(x => x.AppName);
         });
 
         b.Entity<Provider>(e =>
@@ -156,6 +149,7 @@ public class SecureHubDbContext : DbContext
             e.Property(x => x.ActorType).HasMaxLength(32).IsRequired();
             e.Property(x => x.ActorId).HasMaxLength(100).IsRequired();
             e.Property(x => x.ActorLabel).HasMaxLength(200).IsRequired();
+            e.Property(x => x.AppName).HasMaxLength(100);
             e.Property(x => x.CostUsd).HasPrecision(18, 6);
             e.Property(x => x.PrevHash).HasMaxLength(64).IsRequired();
             e.Property(x => x.Hash).HasMaxLength(64).IsRequired();
@@ -163,6 +157,7 @@ public class SecureHubDbContext : DbContext
             e.HasIndex(x => x.Sequence).IsUnique();
             e.HasIndex(x => x.OccurredAt);
             e.HasIndex(x => new { x.AppId, x.OccurredAt });
+            e.HasIndex(x => new { x.AppName, x.OccurredAt });
             e.HasIndex(x => x.RequestId);
             e.HasIndex(x => new { x.PolicyId, x.RuleId });
             e.HasIndex(x => x.BillingOwner);
@@ -188,9 +183,10 @@ public class SecureHubDbContext : DbContext
             e.Property(x => x.RequestId).HasMaxLength(64).IsRequired();
             e.Property(x => x.DekId).HasMaxLength(32).IsRequired();
             e.Property(x => x.ContentHash).HasMaxLength(64).IsRequired();
+            e.Property(x => x.AppName).HasMaxLength(100);
             e.Property(x => x.CipherText).IsRequired();
             e.HasIndex(x => new { x.RequestId, x.Direction, x.Variant }).IsUnique();
-            e.HasIndex(x => new { x.AppId, x.ExpiresAt });
+            e.HasIndex(x => new { x.AppName, x.ExpiresAt });
             e.HasIndex(x => x.ExpiresAt);
         });
 
@@ -207,10 +203,11 @@ public class SecureHubDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Model).HasMaxLength(200).IsRequired();
             e.Property(x => x.UpstreamModel).HasMaxLength(200);
+            e.Property(x => x.AppName).HasMaxLength(100);
             e.Property(x => x.ErrorCode).HasMaxLength(64);
             e.Property(x => x.CostUsd).HasPrecision(18, 6);
             e.HasIndex(x => x.OccurredAt);
-            e.HasIndex(x => new { x.AppId, x.OccurredAt });
+            e.HasIndex(x => new { x.AppName, x.OccurredAt });
             e.HasIndex(x => x.BillingOwner);
             e.HasIndex(x => x.ProviderId);
         });

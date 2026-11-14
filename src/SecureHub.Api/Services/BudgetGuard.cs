@@ -17,11 +17,10 @@ public sealed record BudgetCheck(
 public sealed class BudgetGuard(SecureHubDbContext db, IClock clock)
 {
     public async Task<BudgetCheck> CheckAsync(
-        Guid? appId,
         Guid? teamId,
         CancellationToken ct = default)
     {
-        var budgets = await ApplicableAsync(appId, teamId, ct);
+        var budgets = await ApplicableAsync(teamId, ct);
         if (budgets.Count == 0) return new BudgetCheck(true, null, null, 0, null, 0);
 
         long tokensUsed = 0;
@@ -59,7 +58,6 @@ public sealed class BudgetGuard(SecureHubDbContext db, IClock clock)
     }
 
     public async Task AccumulateAsync(
-        Guid? appId,
         Guid? teamId,
         long tokens,
         decimal cost,
@@ -67,7 +65,7 @@ public sealed class BudgetGuard(SecureHubDbContext db, IClock clock)
     {
         if (tokens <= 0 && cost <= 0) return;
 
-        var budgets = await ApplicableAsync(appId, teamId, ct);
+        var budgets = await ApplicableAsync(teamId, ct);
         if (budgets.Count == 0) return;
 
         foreach (var budget in budgets)
@@ -79,7 +77,7 @@ public sealed class BudgetGuard(SecureHubDbContext db, IClock clock)
         await db.SaveChangesAsync(ct);
     }
 
-    private async Task<List<Budget>> ApplicableAsync(Guid? appId, Guid? teamId, CancellationToken ct)
+    private async Task<List<Budget>> ApplicableAsync(Guid? teamId, CancellationToken ct)
     {
         var now = clock.UtcNow;
         var all = await db.Budgets.Where(b => b.Enabled).ToListAsync(ct);
@@ -89,7 +87,6 @@ public sealed class BudgetGuard(SecureHubDbContext db, IClock clock)
             {
                 BudgetSubject.All => true,
                 BudgetSubject.Team => teamId is not null && b.SubjectId == teamId,
-                BudgetSubject.App => appId is not null && b.SubjectId == appId,
                 _ => false
             })
             .ToList();

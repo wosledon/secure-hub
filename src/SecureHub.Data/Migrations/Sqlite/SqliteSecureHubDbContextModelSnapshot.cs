@@ -17,36 +17,6 @@ namespace SecureHub.Data.Migrations.Sqlite
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
 
-            modelBuilder.Entity("SecureHub.Core.Domain.App", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("TeamId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name")
-                        .IsUnique();
-
-                    b.HasIndex("TeamId");
-
-                    b.ToTable("Apps");
-                });
-
             modelBuilder.Entity("SecureHub.Core.Domain.AssistantMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -172,6 +142,10 @@ namespace SecureHub.Data.Migrations.Sqlite
                     b.Property<Guid?>("AppId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AppName")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("BillingOwner")
                         .HasColumnType("INTEGER");
 
@@ -274,6 +248,8 @@ namespace SecureHub.Data.Migrations.Sqlite
                         .IsUnique();
 
                     b.HasIndex("AppId", "OccurredAt");
+
+                    b.HasIndex("AppName", "OccurredAt");
 
                     b.HasIndex("PolicyId", "RuleId");
 
@@ -458,7 +434,8 @@ namespace SecureHub.Data.Migrations.Sqlite
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("AppId")
+                    b.Property<string>("AppName")
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<byte[]>("CipherText")
@@ -510,7 +487,7 @@ namespace SecureHub.Data.Migrations.Sqlite
 
                     b.HasIndex("ExpiresAt");
 
-                    b.HasIndex("AppId", "ExpiresAt");
+                    b.HasIndex("AppName", "ExpiresAt");
 
                     b.HasIndex("RequestId", "Direction", "Variant")
                         .IsUnique();
@@ -1012,7 +989,8 @@ namespace SecureHub.Data.Migrations.Sqlite
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("AppId")
+                    b.Property<string>("AppName")
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("BillingOwner")
@@ -1085,7 +1063,7 @@ namespace SecureHub.Data.Migrations.Sqlite
 
                     b.HasIndex("ProviderId");
 
-                    b.HasIndex("AppId", "OccurredAt");
+                    b.HasIndex("AppName", "OccurredAt");
 
                     b.ToTable("UsageEvents");
                 });
@@ -1143,6 +1121,10 @@ namespace SecureHub.Data.Migrations.Sqlite
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AppName")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ConstraintsJson")
                         .HasColumnType("TEXT");
 
@@ -1190,7 +1172,12 @@ namespace SecureHub.Data.Migrations.Sqlite
                         .IsRequired()
                         .HasColumnType("BLOB");
 
+                    b.Property<Guid?>("TeamId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AppName");
 
                     b.HasIndex("KeyId")
                         .IsUnique();

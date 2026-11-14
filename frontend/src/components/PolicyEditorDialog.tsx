@@ -36,7 +36,6 @@ import ScienceIcon from '@mui/icons-material/Science';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useTranslation } from 'react-i18next';
 import type {
-  OrgAppRow,
   OrgTeamRow,
   PolicyDetectorInfo,
   PolicyDryRunResult,
@@ -77,7 +76,6 @@ export function PolicyEditorDialog({
   nextVersion,
   detectors,
   teams,
-  apps,
   busy,
   error,
   onClose,
@@ -91,7 +89,6 @@ export function PolicyEditorDialog({
   nextVersion?: number;
   detectors: PolicyDetectorInfo[];
   teams: OrgTeamRow[];
-  apps: OrgAppRow[];
   busy: boolean;
   error: string | null;
   onClose: () => void;
@@ -111,7 +108,7 @@ export function PolicyEditorDialog({
       .filter(Boolean)
       .join('\n')
   );
-  const [testContext, setTestContext] = useState({ appName: '', teamName: '', model: '' });
+  const [testContext, setTestContext] = useState({ teamName: '', model: '' });
   const [testBusy, setTestBusy] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<PolicyTestResult | null>(null);
@@ -170,7 +167,6 @@ export function PolicyEditorDialog({
       setTestResult(await onTest({
         policy: body,
         sampleText: sample,
-        appName: testContext.appName.trim() || undefined,
         teamName: testContext.teamName.trim() || undefined,
         model: testContext.model.trim() || undefined
       }));
@@ -415,14 +411,6 @@ export function PolicyEditorDialog({
                 />
                 <Autocomplete
                   multiple
-                  options={apps}
-                  value={apps.filter((app) => draft.apps.includes(app.name))}
-                  onChange={(_, value) => setDraft({ ...draft, apps: value.map((app) => app.name) })}
-                  getOptionLabel={(option) => (option.team_name ? `${option.name} · ${option.team_name}` : option.name)}
-                  renderInput={(params) => <TextField {...params} label={t('policies.apps')} />}
-                />
-                <Autocomplete
-                  multiple
                   freeSolo
                   options={[] as string[]}
                   value={draft.models}
@@ -560,15 +548,6 @@ export function PolicyEditorDialog({
               </AccordionSummary>
               <AccordionDetails>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label={t('policies.testAppName')}
-                    value={testContext.appName}
-                    onChange={(event) => setTestContext({ ...testContext, appName: event.target.value })}
-                    name="testAppName"
-                    autoComplete="off"
-                  />
                   <TextField
                     fullWidth
                     size="small"

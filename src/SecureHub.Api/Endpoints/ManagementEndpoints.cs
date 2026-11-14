@@ -13,7 +13,13 @@ using SecureHub.Data;
 namespace SecureHub.Api.Endpoints;
 
 public sealed record LoginRequest(string UserName, string Password, string? TotpCode = null);
-public sealed record CreateKeyRequest(string DisplayName, KeyOwnerType OwnerType, Guid OwnerId, string[]? Scopes);
+public sealed record CreateKeyRequest(
+    string DisplayName,
+    KeyOwnerType OwnerType,
+    Guid OwnerId,
+    string[]? Scopes,
+    string? AppName = null,
+    Guid? TeamId = null);
 public sealed record CreateProviderRequest(
     string Alias,
     string ProviderKey,
@@ -245,6 +251,8 @@ public static class ManagementEndpoints
             display_name = k.DisplayName,
             owner_type = k.OwnerType.ToString().ToLowerInvariant(),
             owner_id = k.OwnerId,
+            app_name = k.AppName,
+            team_id = k.TeamId,
             is_revoked = k.IsRevoked,
             created_at = k.CreatedAt,
             expires_at = k.ExpiresAt,
@@ -259,16 +267,46 @@ public static class ManagementEndpoints
     {
         var session = RequireAdmin(http, sessions, options.Value, Permission.KeyWrite);
         if (session is null) return;
+        var localizer = ApiLocalization.For(http, options);
 
-        // ownerId 缺省时挂到第一个应用上，便于冷启动
-        var ownerId = request.OwnerId == Guid.Empty
-            ? (await db.Apps.OrderBy(a => a.CreatedAt).FirstOrDefaultAsync(ct))?.Id ?? Guid.Empty
-            : request.OwnerId;
-
-        if (ownerId == Guid.Empty)
+        var displayName = request.DisplayName?.Trim() ?? string.Empty;
+        if (displayName.Length is 0 or > 200)
         {
-            await ApiError.Create(400, "validation.required", ApiLocalization.For(http, options)).ExecuteAsync(http);
+            await ApiError.Create(400, "validation.required", localizer).ExecuteAsync(http);
             return;
+        }
+
+        if (!Enum.IsDefined(request.OwnerType))
+        {
+            await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        var appName = NormalizeAppName(request.AppName);
+        Guid ownerId;
+        Guid? teamId;
+
+        if (request.OwnerType == KeyOwnerType.Organization)
+        {
+            ownerId = Guid.Empty;
+            teamId = request.TeamId;
+            if (teamId is { } requestedTeam && !await db.Teams.AnyAsync(t => t.Id == requestedTeam, ct))
+            {
+                await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
+                return;
+            }
+        }
+        else
+        {
+            var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.OwnerId, ct);
+            if (user is null || !user.IsActive)
+            {
+                await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
+                return;
+            }
+
+            ownerId = user.Id;
+            teamId = user.TeamId;
         }
 
         var (fullKey, parsed) = VirtualKeyFormat.Generate();
@@ -277,9 +315,11 @@ public static class ManagementEndpoints
             KeyId = parsed.KeyId,
             SecretHash = VirtualKeyFormat.HashSecret(parsed.Secret),
             Prefix = fullKey[..Math.Min(20, fullKey.Length)],
-            DisplayName = request.DisplayName,
+            DisplayName = displayName,
             OwnerType = request.OwnerType,
             OwnerId = ownerId,
+            AppName = appName,
+            TeamId = teamId,
             ScopesJson = System.Text.Json.JsonSerializer.Serialize(request.Scopes ?? ["chat:write", "models:read"]),
             CreatedAt = clock.UtcNow
         };
@@ -289,14 +329,21 @@ public static class ManagementEndpoints
 
         await audit.AppendAsync(
             AuditEventTypes.KeyCreated, "user", session.UserId.ToString(), session.UserName,
-            "ok", configure: e => e.Detail = $"{{\"keyId\":\"{entity.KeyId}\"}}", ct: ct);
+            "ok", configure: e => e.Detail = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                key_id = entity.KeyId,
+                owner_type = entity.OwnerType.ToString().ToLowerInvariant(),
+                app_name = appName,
+                team_id = entity.TeamId
+            }), ct: ct);
 
         await http.Response.WriteAsJsonAsync(new
         {
             id = entity.Id,
             key = fullKey,
             key_id = entity.KeyId,
-            display_name = entity.DisplayName
+            display_name = entity.DisplayName,
+            app_name = entity.AppName
         }, ct);
     }
 
@@ -338,7 +385,14 @@ public static class ManagementEndpoints
         var query = db.AuditEvents.AsNoTracking()
             .Where(e => e.OccurredAt >= from && e.OccurredAt <= to);
 
-        if (Guid.TryParse(http.Request.Query["appId"], out var appId))
+        if (!string.IsNullOrWhiteSpace(http.Request.Query["app"]))
+        {
+            var app = http.Request.Query["app"].ToString().Trim();
+            query = query.Where(e =>
+                (e.AppName != null && e.AppName.Contains(app)) ||
+                (e.ActorType == "app" && e.ActorLabel.Contains(app)));
+        }
+        else if (Guid.TryParse(http.Request.Query["appId"], out var appId))
         {
             query = query.Where(e => e.AppId == appId);
         }
@@ -364,7 +418,7 @@ public static class ManagementEndpoints
             action = e.Action.ToString().ToLowerInvariant(),
             e.ActorType,
             e.ActorLabel,
-            e.AppId,
+            app_name = e.AppName ?? (e.ActorType == "app" ? e.ActorLabel : null),
             e.RequestId,
             e.ModelAlias,
             e.ProviderId,
@@ -442,7 +496,9 @@ public static class ManagementEndpoints
     {
         if (RequireAdmin(http, sessions, options.Value, Permission.BudgetWrite) is null) return;
 
-        var rows = await db.Budgets.AsNoTracking().ToListAsync(ct);
+        var rows = await db.Budgets.AsNoTracking()
+            .Where(b => b.Subject != BudgetSubject.App)
+            .ToListAsync(ct);
         await http.Response.WriteAsJsonAsync(rows.Select(b => new
         {
             b.Id,
@@ -472,15 +528,24 @@ public static class ManagementEndpoints
             return;
         }
 
+        if (request.Subject is not (BudgetSubject.All or BudgetSubject.Team) ||
+            (request.Subject == BudgetSubject.Team && request.SubjectId is null))
+        {
+            await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        var subjectId = request.Subject == BudgetSubject.All ? null : request.SubjectId;
+
         var budget = await db.Budgets.FirstOrDefaultAsync(b =>
-            b.Subject == request.Subject && b.SubjectId == request.SubjectId && b.Period == period, ct);
+            b.Subject == request.Subject && b.SubjectId == subjectId && b.Period == period, ct);
 
         if (budget is null)
         {
             budget = new Budget
             {
                 Subject = request.Subject,
-                SubjectId = request.SubjectId,
+                SubjectId = subjectId,
                 Period = period,
                 PeriodStart = clock.UtcNow
             };
@@ -703,8 +768,18 @@ public static class ManagementEndpoints
             ? Math.Clamp(requested, 1, 200_000)
             : 10_000;
 
-        var rows = await db.AuditEvents.AsNoTracking()
-            .Where(e => e.OccurredAt >= from && e.OccurredAt <= to)
+        var query = db.AuditEvents.AsNoTracking()
+            .Where(e => e.OccurredAt >= from && e.OccurredAt <= to);
+
+        if (!string.IsNullOrWhiteSpace(http.Request.Query["app"]))
+        {
+            var app = http.Request.Query["app"].ToString().Trim();
+            query = query.Where(e =>
+                (e.AppName != null && e.AppName.Contains(app)) ||
+                (e.ActorType == "app" && e.ActorLabel.Contains(app)));
+        }
+
+        var rows = await query
             .OrderBy(e => e.Sequence)
             .Take(limit)
             .ToListAsync(ct);
@@ -723,6 +798,7 @@ public static class ManagementEndpoints
                 e.ActorId,
                 e.ActorLabel,
                 e.AppId,
+                app_name = e.AppName ?? (e.ActorType == "app" ? e.ActorLabel : null),
                 e.TeamId,
                 e.RequestId,
                 e.ModelAlias,
@@ -922,17 +998,24 @@ public static class ManagementEndpoints
             key_id = k.KeyId,
             prefix = k.Prefix,
             display_name = k.DisplayName,
+            app_name = k.AppName,
             is_revoked = k.IsRevoked,
             created_at = k.CreatedAt
         }), ct);
     }
 
     private static async Task CreateMyKeyAsync(
-        HttpContext http, SessionStore sessions, SecureHubDbContext db,
+        HttpContext http, SessionStore sessions, SecureHubDbContext db, AuditWriter audit,
         IOptions<SecureHubOptions> options, IClock clock, CancellationToken ct)
     {
         var session = RequireSession(http, sessions, options.Value);
         if (session is null) return;
+
+        var requestedApp = http.Request.Query["appName"].ToString();
+        if (string.IsNullOrWhiteSpace(requestedApp))
+        {
+            requestedApp = http.Request.Headers["X-SecureHub-App"].ToString();
+        }
 
         var (fullKey, parsed) = VirtualKeyFormat.Generate();
 
@@ -944,11 +1027,22 @@ public static class ManagementEndpoints
             DisplayName = $"{session.UserName} personal",
             OwnerType = KeyOwnerType.User,
             OwnerId = session.UserId,
+            AppName = NormalizeAppName(requestedApp),
+            TeamId = session.TeamId,
             ScopesJson = "[\"chat:write\",\"models:read\"]",
             CreatedAt = clock.UtcNow
         });
 
         await db.SaveChangesAsync(ct);
+        await audit.AppendAsync(
+            AuditEventTypes.KeyCreated, "user", session.UserId.ToString(), session.UserName,
+            "ok", configure: e => e.Detail = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                key_id = parsed.KeyId,
+                owner_type = "user",
+                app_name = NormalizeAppName(requestedApp)
+            }), ct: ct);
+
         await http.Response.WriteAsJsonAsync(new { key = fullKey, key_id = parsed.KeyId }, ct);
     }
 
@@ -980,6 +1074,13 @@ public static class ManagementEndpoints
     }
 
     // ---------- helpers ----------
+
+    private static string? NormalizeAppName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var sanitized = new string(value.Trim().Where(ch => !char.IsControl(ch)).ToArray());
+        return sanitized.Length == 0 ? null : sanitized.Length <= 100 ? sanitized : sanitized[..100];
+    }
 
     private static SessionEntry? RequireSession(
         HttpContext http, SessionStore sessions, SecureHubOptions options)

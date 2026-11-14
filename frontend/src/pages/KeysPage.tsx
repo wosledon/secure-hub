@@ -32,7 +32,7 @@ import KeyIcon from '@mui/icons-material/Key';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import { useTranslation } from 'react-i18next';
-import { api, type KeyRow } from '../api';
+import { api, type KeyRow, type OrgTeamRow, type OrgUserRow } from '../api';
 import { CodeBlock, ConfirmDialog, CopyButton, EmptyState, ErrorState, PageHeader, SecretDialog, StatusChip, TableSkeleton } from '../components/ui';
 import { useFormatters } from '../utils/format';
 
@@ -45,8 +45,12 @@ export default function KeysPage() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState('');
+  const [appName, setAppName] = useState('');
   const [ownerType, setOwnerType] = useState<0 | 1>(0);
-  const [ownerId, setOwnerId] = useState('00000000-0000-0000-0000-000000000000');
+  const [ownerId, setOwnerId] = useState('');
+  const [teamId, setTeamId] = useState('');
+  const [users, setUsers] = useState<OrgUserRow[]>([]);
+  const [teams, setTeams] = useState<OrgTeamRow[]>([]);
   const [scopes, setScopes] = useState(['chat:write', 'models:read']);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -62,19 +66,35 @@ export default function KeysPage() {
   }, []);
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    if (!open) return;
+    Promise.all([api.orgUsers(), api.orgTeams()])
+      .then(([userRows, teamRows]) => { setUsers(userRows.filter((row) => row.is_active)); setTeams(teamRows.filter((row) => row.is_active)); })
+      .catch(() => undefined);
+  }, [open]);
+
   const filtered = useMemo(() => {
     const search = query.trim().toLowerCase();
-    return rows.filter((row) => !search || `${row.display_name} ${row.key_id} ${row.prefix}`.toLowerCase().includes(search));
+    return rows.filter((row) => !search || `${row.display_name} ${row.key_id} ${row.prefix} ${row.app_name ?? ''} ${row.owner_type}`.toLowerCase().includes(search));
   }, [rows, query]);
 
   const create = async () => {
     setBusy(true);
     setFormError(null);
     try {
-      const result = await api.createKey({ displayName: displayName.trim(), ownerType, ownerId, scopes });
+      const result = await api.createKey({
+        displayName: displayName.trim(),
+        ownerType,
+        ownerId: ownerType === 1 ? ownerId : '00000000-0000-0000-0000-000000000000',
+        appName: appName.trim() || undefined,
+        teamId: ownerType === 0 && teamId ? teamId : null,
+        scopes
+      });
       setOpen(false);
       setSecret(result.key);
       setDisplayName('');
+      setAppName('');
+      setTeamId('');
       await load();
     } catch (err) { setFormError((err as Error).message); } finally { setBusy(false); }
   };
@@ -90,7 +110,7 @@ export default function KeysPage() {
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
 
-  const curl = `curl ${window.location.origin}/v1/chat/completions \\\n  -H "Authorization: Bearer $SECUREHUB_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "org/<provider>/<model>",\n    "messages": [{"role":"user","content":"Hello"}]\n  }'`;
+  const curl = `curl ${window.location.origin}/v1/chat/completions \\\n  -H "Authorization: Bearer $SECUREHUB_KEY" \\\n  -H "X-SecureHub-App: my-project" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "org/<provider>/<model>",\n    "messages": [{"role":"user","content":"Hello"}]\n  }'`;
 
   return (
     <Stack spacing={3}>
@@ -105,17 +125,18 @@ export default function KeysPage() {
           <Box sx={{ flexGrow: 1 }}><Typography variant="h2">{t('keys.title')}</Typography><Typography variant="caption" color="text.secondary">{rows.filter((row) => !row.is_revoked).length} {t('common.active')} · {rows.filter((row) => row.is_revoked).length} {t('common.revoked')}</Typography></Box>
           <TextField size="small" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('keys.search')} name="keySearch" autoComplete="off" sx={{ width: { xs: '100%', sm: 320 } }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }} />
         </Box>
-        {loading ? <TableSkeleton rows={6} columns={6} /> : filtered.length === 0 ? (
+        {loading ? <TableSkeleton rows={6} columns={8} /> : filtered.length === 0 ? (
           <EmptyState title={rows.length ? t('common.empty') : t('keys.empty')} description={rows.length ? undefined : t('keys.emptyHint')} action={!rows.length && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>{t('keys.create')}</Button>} />
         ) : (
           <Box sx={{ overflowX: 'auto' }}><Table>
-            <TableHead><TableRow><TableCell>{t('common.name')}</TableCell><TableCell>{t('keys.keyId')}</TableCell><TableCell>{t('keys.prefix')}</TableCell><TableCell>{t('keys.owner')}</TableCell><TableCell>{t('common.createdAt')}</TableCell><TableCell>{t('common.status')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>{t('common.name')}</TableCell><TableCell>{t('keys.appName')}</TableCell><TableCell>{t('keys.keyId')}</TableCell><TableCell>{t('keys.prefix')}</TableCell><TableCell>{t('keys.owner')}</TableCell><TableCell>{t('common.createdAt')}</TableCell><TableCell>{t('common.status')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead>
             <TableBody>{filtered.map((row) => (
               <TableRow key={row.id} hover sx={{ opacity: row.is_revoked ? 0.65 : 1 }}>
                 <TableCell><Stack direction="row" spacing={1.25} alignItems="center"><Box sx={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 1.5, bgcolor: 'action.hover', color: 'primary.main' }}><KeyIcon fontSize="small" /></Box><Typography variant="subtitle2">{row.display_name}</Typography></Stack></TableCell>
+                <TableCell>{row.app_name ? <Chip size="small" color="primary" variant="outlined" label={row.app_name} /> : <Typography variant="body2" color="text.secondary">—</Typography>}</TableCell>
                 <TableCell><Box component="code">{row.key_id}</Box></TableCell>
                 <TableCell><Stack direction="row" alignItems="center"><Box component="code" sx={{ fontSize: 11 }}>{row.prefix}••••••••</Box><CopyButton text={row.prefix} iconOnly /></Stack></TableCell>
-                <TableCell><Chip size="small" variant="outlined" label={row.owner_type} /></TableCell>
+                <TableCell><Chip size="small" variant="outlined" label={row.owner_type === 'organization' ? t('keys.organization') : t('keys.user')} /></TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{format.dateTime(row.created_at)}</TableCell>
                 <TableCell><StatusChip status={row.is_revoked ? 'revoked' : 'active'} label={row.is_revoked ? t('common.revoked') : t('common.active')} /></TableCell>
                 <TableCell align="right"><Stack direction="row" spacing={0.5} justifyContent="flex-end"><Button size="small" onClick={() => setConstraintsTarget(row)} disabled={row.is_revoked}>{t('keys.constraints')}</Button><Button size="small" color="error" startIcon={<BlockIcon />} disabled={row.is_revoked} onClick={() => setRevokeTarget(row)}>{t('keys.revoke')}</Button></Stack></TableCell>
@@ -131,12 +152,22 @@ export default function KeysPage() {
         <DialogContent><Stack spacing={2.25} mt={1}>
           <Typography variant="body2" color="text.secondary">{t('keys.createHint')}</Typography>
           <TextField label={t('common.name')} value={displayName} onChange={(event) => setDisplayName(event.target.value)} helperText={t('keys.displayNameHint')} name="displayName" autoComplete="off" required />
-          <TextField select label={t('keys.ownerType')} value={ownerType} onChange={(event) => { const value = Number(event.target.value) as 0 | 1; setOwnerType(value); setOwnerId(value === 0 ? '00000000-0000-0000-0000-000000000000' : ''); }}><MenuItem value={0}>{t('keys.organization')}</MenuItem><MenuItem value={1}>{t('keys.user')}</MenuItem></TextField>
-          {ownerType === 1 && <TextField label={t('keys.ownerId')} value={ownerId} onChange={(event) => setOwnerId(event.target.value)} name="ownerId" autoComplete="off" required />}
+          <TextField label={t('keys.appName')} value={appName} onChange={(event) => setAppName(event.target.value)} helperText={t('keys.appNameHint')} name="appName" autoComplete="off" inputProps={{ maxLength: 100 }} />
+          <TextField select label={t('keys.ownerType')} value={ownerType} onChange={(event) => { const value = Number(event.target.value) as 0 | 1; setOwnerType(value); setOwnerId(''); setTeamId(''); }}><MenuItem value={0}>{t('keys.organization')}</MenuItem><MenuItem value={1}>{t('keys.user')}</MenuItem></TextField>
+          {ownerType === 0 ? (
+            <TextField select label={t('account.team')} value={teamId} onChange={(event) => setTeamId(event.target.value)}>
+              <MenuItem value="">{t('org.noTeam')}</MenuItem>
+              {teams.map((team) => <MenuItem key={team.id} value={team.id}>{team.name}</MenuItem>)}
+            </TextField>
+          ) : (
+            <TextField select label={t('keys.ownerUser')} value={ownerId} onChange={(event) => setOwnerId(event.target.value)} required>
+              {users.map((user) => <MenuItem key={user.id} value={user.id}>{user.userName}</MenuItem>)}
+            </TextField>
+          )}
           <Box><Typography variant="body2" fontWeight={600} mb={1}>{t('keys.scopes')}</Typography><FormGroup row>{['chat:write', 'models:read'].map((scope) => <FormControlLabel key={scope} control={<Checkbox size="small" checked={scopes.includes(scope)} onChange={(event) => setScopes((current) => event.target.checked ? [...current, scope] : current.filter((item) => item !== scope))} />} label={<Box component="code" fontSize={12}>{scope}</Box>} />)}</FormGroup></Box>
           {formError && <Alert severity="error">{formError}</Alert>}
         </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setOpen(false)} disabled={busy}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => void create()} disabled={busy || !displayName.trim() || !ownerId || scopes.length === 0}>{busy ? t('common.working') : t('keys.create')}</Button></DialogActions>
+        <DialogActions><Button onClick={() => setOpen(false)} disabled={busy}>{t('common.cancel')}</Button><Button variant="contained" onClick={() => void create()} disabled={busy || !displayName.trim() || (ownerType === 1 && !ownerId) || scopes.length === 0}>{busy ? t('common.working') : t('keys.create')}</Button></DialogActions>
       </Dialog>
       <SecretDialog open={!!secret} secret={secret ?? ''} onClose={() => setSecret(null)} />
       <ConfirmDialog open={!!revokeTarget} title={t('keys.revokeTitle')} description={t('keys.revokeHint', { name: revokeTarget?.display_name ?? '' })} confirmLabel={t('keys.revoke')} busy={busy} danger onClose={() => setRevokeTarget(null)} onConfirm={() => void revoke()} />

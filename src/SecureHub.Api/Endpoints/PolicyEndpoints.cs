@@ -407,13 +407,12 @@ public static class PolicyEndpoints
             "block");
 
         var context = new PolicyEvalContext(
-            null,
             request.AppName,
             null,
             request.TeamName,
             request.Model,
             counts.Keys.ToArray(),
-            Bucket: 0,
+            0,
             TimeOnly.FromDateTime(DateTime.UtcNow),
             counts);
 

@@ -188,7 +188,7 @@ public sealed class AssistantToolbox(
                 type = r.EventType,
                 action = r.Action.ToString().ToLowerInvariant(),
                 actor = r.ActorLabel,
-                app_id = r.AppId,
+                app_name = r.AppName ?? (r.ActorType == "app" ? r.ActorLabel : null),
                 request_id = r.RequestId,
                 rule = r.RuleId,
                 policy = r.PolicyId

@@ -45,7 +45,6 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useTranslation } from 'react-i18next';
 import {
   api,
-  type OrgAppRow,
   type OrgTeamRow,
   type PolicyDetectorInfo,
   type PolicyRow,
@@ -301,7 +300,6 @@ export default function PoliciesPage() {
   const [rows, setRows] = useState<PolicyRow[]>([]);
   const [detectors, setDetectors] = useState<PolicyDetectorInfo[]>(fallbackDetectors);
   const [teams, setTeams] = useState<OrgTeamRow[]>([]);
-  const [apps, setApps] = useState<OrgAppRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -327,16 +325,14 @@ export default function PoliciesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [policyRows, detectorRows, teamRows, appRows] = await Promise.all([
+      const [policyRows, detectorRows, teamRows] = await Promise.all([
         api.policies(),
         api.policyDetectors().catch(() => fallbackDetectors),
-        api.orgTeams().catch(() => [] as OrgTeamRow[]),
-        api.orgApps().catch(() => [] as OrgAppRow[])
+        api.orgTeams().catch(() => [] as OrgTeamRow[])
       ]);
       setRows(policyRows);
       setDetectors(detectorRows.length > 0 ? detectorRows : fallbackDetectors);
       setTeams(teamRows);
-      setApps(appRows);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -786,7 +782,6 @@ export default function PoliciesPage() {
           nextVersion={nextVersion(editor.original)}
           detectors={detectors}
           teams={teams}
-          apps={apps}
           busy={editorBusy}
           error={editorError}
           onClose={() => setEditor(null)}

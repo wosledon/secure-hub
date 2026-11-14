@@ -39,7 +39,7 @@ public static class EmbeddingsEndpoints
         var requestId = "req_" + Guid.NewGuid().ToString("N")[..16];
         http.Response.Headers["x-securehub-request-id"] = requestId;
 
-        var (auth, authError) = await authenticator.AuthenticateAsync(BearerToken(http.Request), ct);
+        var (auth, authError) = await authenticator.AuthenticateAsync(BearerToken(http.Request), ApiKeyAuthenticator.RequestAppName(http.Request), ct);
         if (auth is null)
         {
             await audit.AppendAsync(AuditEventTypes.AuthFailed, "virtualKey", "unknown", "unknown",
@@ -64,7 +64,7 @@ public static class EmbeddingsEndpoints
             return;
         }
 
-        var budget = await budgets.CheckAsync(auth.AppId, auth.TeamId, ct);
+        var budget = await budgets.CheckAsync(auth.TeamId, ct);
         if (!budget.Allowed)
         {
             await audit.AppendAsync(AuditEventTypes.QuotaExceeded, "virtualKey", auth.OwnerId.ToString(), auth.Label,
@@ -199,7 +199,7 @@ public static class EmbeddingsEndpoints
         db.UsageEvents.Add(new UsageEvent
         {
             OccurredAt = DateTimeOffset.FromUnixTimeMilliseconds(clock.UtcNow.ToUnixTimeMilliseconds()),
-            AppId = auth.AppId,
+            AppName = auth.AppName,
             TeamId = auth.TeamId,
             UserId = auth.OwnerType == KeyOwnerType.User ? auth.OwnerId : null,
             VirtualKeyId = auth.VirtualKeyId,
@@ -218,19 +218,19 @@ public static class EmbeddingsEndpoints
             RequestId = requestId
         });
         await db.SaveChangesAsync(ct);
-        await budgets.AccumulateAsync(auth.AppId, auth.TeamId, inputTokens, cost, ct);
+        await budgets.AccumulateAsync(auth.TeamId, inputTokens, cost, ct);
         rateLimiter.AddTokens(auth.VirtualKeyId, inputTokens);
 
         await audit.AppendAsync(AuditEventTypes.RouteSelected,
-            auth.OwnerType == KeyOwnerType.App ? "app" : "user",
-            auth.OwnerId.ToString(), auth.Label, errorCode ?? "ok",
+            auth.AuditActorType,
+            auth.AuditActorId, auth.Label, errorCode ?? "ok",
             action: errorCode is null ? GuardrailAction.Allow : GuardrailAction.Block,
             severity: errorCode is null ? AuditSeverity.Info : AuditSeverity.Warning,
             billingOwner: decision.BillingOwner,
             configure: e =>
             {
                 e.RequestId = requestId;
-                e.AppId = auth.AppId;
+                e.AppName = auth.AppName;
                 e.TeamId = auth.TeamId;
                 e.ModelAlias = rawModel;
                 e.ProviderId = provider.Id;

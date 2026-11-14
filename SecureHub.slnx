@@ -1,2 +1,10 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SecureHub.Api/SecureHub.Api.csproj" />
+    <Project Path="src/SecureHub.Core/SecureHub.Core.csproj" />
+    <Project Path="src/SecureHub.Data/SecureHub.Data.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SecureHub.Core.Tests/SecureHub.Core.Tests.csproj" />
+  </Folder>
 </Solution>

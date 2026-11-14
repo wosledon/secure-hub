@@ -6,6 +6,7 @@ export const zhCN = {
   nav: {
     admin: '管理端',
     me: '我的工作台',
+    assistant: '审计助手',
     overview: '概览',
     providers: '供应商',
     keys: '密钥',
@@ -57,6 +58,20 @@ export const zhCN = {
     billingOrg: '企业账',
     billingUser: '个人账'
   },
+  assistant: {
+    title: '审计助手',
+    hint: '用自然语言查审计、成本与路由情况；结论必须带证据',
+    sessions: '会话',
+    newSession: '新会话',
+    placeholder: '问点什么，比如：最近 7 天有多少请求被护栏拦截？',
+    inputPlaceholder: '输入问题，Enter 发送，Shift+Enter 换行',
+    inputHint: '助手只能读审计元数据；正文读取默认关闭，需管理员开启。',
+    send: '发送',
+    stop: '停止',
+    thinking: '正在检索审计数据…',
+    emptyAnswer: '模型未返回内容，请换个问法。',
+    evidenceHint: '证据 ID，可在审计日志中检索'
+  },
   table: {
     source: '来源',
     billing: '计费',
@@ -70,6 +85,7 @@ export const en = {
   nav: {
     admin: 'Admin',
     me: 'My Workspace',
+    assistant: 'Audit Assistant',
     overview: 'Overview',
     providers: 'Providers',
     keys: 'Keys',
@@ -120,6 +136,20 @@ export const en = {
     createMyKey: 'Create personal key',
     billingOrg: 'Org',
     billingUser: 'Personal'
+  },
+  assistant: {
+    title: 'Audit Assistant',
+    hint: 'Ask about audit, cost and routing; every conclusion must cite evidence',
+    sessions: 'Sessions',
+    newSession: 'New session',
+    placeholder: 'Try: how many requests were blocked by guardrails in the last 7 days?',
+    inputPlaceholder: 'Type a question. Enter to send, Shift+Enter for a new line',
+    inputHint: 'The assistant reads audit metadata only. Content reading is off unless an admin enables it.',
+    send: 'Send',
+    stop: 'Stop',
+    thinking: 'Searching audit data…',
+    emptyAnswer: 'The model returned nothing. Try rephrasing.',
+    evidenceHint: 'Evidence id, searchable in the audit log'
   },
   table: {
     source: 'Source',

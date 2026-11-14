@@ -40,6 +40,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** 解析一个 SSE 帧并分发到对应回调。 */
+function dispatchFrame(frame: string, handlers: AssistantStreamHandlers) {
+  let event = '';
+  const dataLines: string[] = [];
+
+  for (const raw of frame.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    if (line.startsWith(':')) continue;
+
+    if (line.startsWith('event:')) {
+      event = line.slice(6).trim();
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+
+  if (dataLines.length === 0 || event.length === 0) return;
+  const payload = dataLines.join('\n');
+
+  try {
+    if (event === 'delta') {
+      const parsed = JSON.parse(payload) as { text?: string | null };
+      if (parsed.text) handlers.onDelta(parsed.text);
+    } else if (event === 'done') {
+      handlers.onStats?.(JSON.parse(payload) as AssistantDoneEvent);
+    } else if (event === 'session') {
+      handlers.onSession?.(JSON.parse(payload) as AssistantSessionEvent);
+    } else if (event === 'error') {
+      const parsed = JSON.parse(payload) as { text?: string | null };
+      handlers.onError?.(parsed.text ?? 'unknown error');
+    }
+  } catch {
+    // 单个帧损坏不应中断整条流
+  }
+}
+
 export const api = {
   login: (userName: string, password: string) =>
     request<{ user: { user_name: string; roles: number[] } }>('/api/auth/login', {
@@ -111,7 +147,88 @@ export const api = {
     request<{ ok: boolean; providers: number; models: number; error?: string | null }>(
       '/api/admin/catalog/sync',
       { method: 'POST' }
-    )
+    ),
+
+  assistantSessions: () =>
+    request<{ sessions: AssistantSessionRow[] }>('/api/assistant/sessions'),
+  assistantSession: (id: string) =>
+    request<AssistantSessionDetail>(`/api/assistant/sessions/${id}`),
+  deleteAssistantSession: (id: string) =>
+    request<void>(`/api/assistant/sessions/${id}`, { method: 'DELETE' }),
+  assistantTools: () =>
+    request<{ tools: Array<{ name: string; readOnly: boolean }> }>('/api/assistant/tools'),
+
+  /** 非流式问答（保留作为降级路径）。 */
+  assistantChat: (body: AssistantChatBody) =>
+    request<AssistantChatResult>('/api/assistant/chat', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+
+  /** 流式问答：按 SSE 逐段回调，返回 abort 控制器。 */
+  assistantStream: (
+    body: AssistantChatBody,
+    handlers: AssistantStreamHandlers
+  ): AbortController => {
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/assistant/chat/stream', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+
+        if (!response.ok || !response.body) {
+          let message = response.statusText;
+          try {
+            const errBody = (await response.json()) as { error?: ApiErrorBody };
+            message = errBody.error?.message ?? message;
+          } catch {
+            // 非 JSON 错误体，直接用品状态文本
+          }
+          handlers.onError?.(message);
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          let boundary = buffer.indexOf('\n\n');
+          while (boundary >= 0) {
+            const frame = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            dispatchFrame(frame, handlers);
+            boundary = buffer.indexOf('\n\n');
+          }
+        }
+
+        if (buffer.trim().length > 0) {
+          dispatchFrame(buffer, handlers);
+        }
+
+        handlers.onDone?.();
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+          handlers.onDone?.();
+          return;
+        }
+        handlers.onError?.((error as Error).message);
+      }
+    })();
+
+    return controller;
+  }
 };
 
 export interface ProviderRow {
@@ -244,4 +361,68 @@ export interface UpsertBudgetBody {
   tokenLimit?: number | null;
   costLimit?: number | null;
   enabled: boolean;
+}
+
+export interface AssistantChatBody {
+  question: string;
+  model?: string;
+  sessionId?: string;
+}
+
+export interface AssistantChatResult {
+  sessionId?: string | null;
+  answer: string;
+  evidence: string[];
+  toolCalls: number;
+  model: string;
+  toolNames?: string | null;
+}
+
+export interface AssistantSessionRow {
+  id: string;
+  title: string;
+  model?: string | null;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssistantMessageRow {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  toolNames?: string | null;
+  evidence: string[];
+  toolCallCount: number;
+  model?: string | null;
+  createdAt: string;
+}
+
+export interface AssistantSessionDetail extends AssistantSessionRow {
+  messages: AssistantMessageRow[];
+}
+
+/** `done` 事件：工具轮数、证据、实际模型。字段为 camelCase（后端用 Web 选项序列化）。 */
+export interface AssistantDoneEvent {
+  kind: string;
+  toolCalls: number;
+  evidence?: string[] | null;
+  model?: string | null;
+  toolNames?: string | null;
+}
+
+/** 流末补发的会话信息（snake_case，便于前端直接挂到下一次请求）。 */
+export interface AssistantSessionEvent {
+  session_id?: string | null;
+  tool_calls: number;
+  evidence?: string[] | null;
+  model?: string | null;
+}
+
+export interface AssistantStreamHandlers {
+  onDelta: (text: string) => void;
+  onStats?: (event: AssistantDoneEvent) => void;
+  onSession?: (event: AssistantSessionEvent) => void;
+  onError?: (message: string) => void;
+  onDone?: () => void;
 }

@@ -21,6 +21,7 @@ import {
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import KeyIcon from '@mui/icons-material/Key';
 import LogoutIcon from '@mui/icons-material/Logout';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 import StorageIcon from '@mui/icons-material/Storage';
 import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
@@ -29,6 +30,7 @@ import { api } from './api';
 import { setLanguage } from './i18n';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
+import AssistantPage from './pages/AssistantPage';
 import MePage from './pages/MePage';
 import type { Session } from './types';
 import { ROLE_END_USER } from './types';
@@ -74,6 +76,7 @@ export default function App() {
 
   const items = [
     { path: '/admin', label: t('nav.admin'), icon: <AssessmentIcon />, hidden: isEndUserOnly },
+    { path: '/assistant', label: t('nav.assistant'), icon: <SmartToyIcon />, hidden: false },
     { path: '/me', label: t('nav.me'), icon: <TravelExploreIcon />, hidden: false }
   ];
 
@@ -176,6 +179,7 @@ export default function App() {
         <Toolbar />
         <Routes>
           <Route path="/admin" element={isEndUserOnly ? <Navigate to="/me" replace /> : <AdminPage />} />
+          <Route path="/assistant" element={<AssistantPage />} />
           <Route path="/me" element={<MePage />} />
           <Route path="*" element={<Navigate to={isEndUserOnly ? '/me' : '/admin'} replace />} />
         </Routes>

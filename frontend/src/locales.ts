@@ -4,7 +4,7 @@ export const zhCN = {
     admin: '管理端', me: '我的工作台', workspace: '个人工作台', assistant: '审计助手',
     overview: '总览', providers: '供应商', catalog: '模型目录', routing: '模型路由',
     keys: '虚拟密钥', policies: '安全策略', budgets: '用量与预算', audit: '审计日志',
-    organization: '组织管理', entitlements: '访问授权', observability: '可观测性',
+    organization: '组织管理', entitlements: '访问授权', observability: '可观测性', system: '系统',
     models: '可用模型', logout: '退出登录', management: '企业管理', personal: '个人空间',
     account: '账号与安全', main: '主导航', open: '打开导航', close: '关闭导航'
   },
@@ -242,13 +242,27 @@ export const zhCN = {
     deleteTitle: '删除这条授权？', deleteHint: '删除后该主体将失去对应供应商的访问权限，除非仍有其他授权匹配。'
   },
   observability: {
-    title: '可观测性', description: '近 7 天数据面请求量、成功率、延迟分位与按模型/供应商分布。',
-    requests: '数据面请求', successRate: '成功率', errors: '错误', p95: 'P95 延迟', p50: 'P50', p99: 'P99',
+    title: '可观测性', description: '近 7 天数据面请求量、成功率、延迟分位与按模型/供应商分布。',    requests: '数据面请求', successRate: '成功率', errors: '错误', p95: 'P95 延迟', p50: 'P50', p99: 'P99',
     avgLatency: '平均延迟', avgHint: '包含流式请求的头部等待时间',
     hourly: '按小时分布', hourlyHint: 'UTC 小时；橙色表示该小时存在失败请求',
     byModel: '按模型延迟', byModelHint: '按请求数排序，展示前 25 个模型',
     security: '安全拦截', securityHint: '近 7 天护栏、限流与认证失败次数', noBlocks: '近 7 天没有安全拦截',
     byProvider: '按供应商'
+  },
+  system: {
+    title: '系统', description: '安全基线自检与当前生效配置；配置变更通过 appsettings 或环境变量完成。',
+    database: '数据库', autoMigrate: '自动迁移：{{value}}', https: 'HTTPS', byok: '个人 BYOK',
+    byokDetail: '白名单 {{allowed}} · 禁用用户 {{blocked}}', providers: '供应商', providerHint: '已接入供应商总数',
+    baseline: '安全基线', baselineHint: '启动后可按需重新检查', healthy: '全部通过', attention: '需要关注',
+    checkedAt: '检查时间 {{time}}', effective: '生效配置', contentRetention: '内容留存',
+    persistOn: '已开启正文留存', persistOff: '全局正文留存已关闭（员工流量仍强制记录）',
+    guardrails: '护栏', session: '会话有效期', bodyLimit: '请求体上限',
+    configOnly: '这些值来自配置，不在控制台内热修改；修改后重启服务生效。',
+    check: {
+      audit_chain: '审计链', bootstrap_password_removed: '初始管理员密码文件', data_protection_keys: '数据保护密钥',
+      content_key: '内容加密密钥', https: '传输安全', content_retention: '内容留存', provider_credentials: '供应商凭据',
+      byok: '个人供应商', database: '数据库'
+    }
   },
   admin: {
     overviewHint: '企业调用、成本与拦截概览', createProvider: '添加企业供应商', createKey: '签发应用密钥',
@@ -263,7 +277,7 @@ export const en = {
     admin: 'Admin', me: 'My Workspace', workspace: 'My workspace', assistant: 'Audit assistant',
     overview: 'Overview', providers: 'Providers', catalog: 'Model catalog', routing: 'Model routing',
     keys: 'Virtual keys', policies: 'Security policies', budgets: 'Usage & budgets', audit: 'Audit log',
-    organization: 'Organization', entitlements: 'Entitlements', observability: 'Observability',
+    organization: 'Organization', entitlements: 'Entitlements', observability: 'Observability', system: 'System',
     models: 'Available models', logout: 'Sign out', management: 'MANAGEMENT', personal: 'PERSONAL',
     account: 'Account & security', main: 'Main navigation', open: 'Open navigation', close: 'Close navigation'
   },
@@ -510,6 +524,21 @@ export const en = {
     byModel: 'Latency by model', byModelHint: 'Top 25 models ordered by requests',
     security: 'Security blocks', securityHint: 'Guardrail, rate-limit, and auth failures in the last 7 days', noBlocks: 'No security blocks in the last 7 days',
     byProvider: 'By provider'
+  },
+  system: {
+    title: 'System', description: 'Security baseline checks and effective configuration. Changes are made through appsettings or environment variables.',
+    database: 'Database', autoMigrate: 'Auto-migrate: {{value}}', https: 'HTTPS', byok: 'Personal BYOK',
+    byokDetail: '{{allowed}} allowlisted · {{blocked}} blocked users', providers: 'Providers', providerHint: 'Connected providers',
+    baseline: 'Security baseline', baselineHint: 'Re-run the checks at any time', healthy: 'All checks passed', attention: 'Needs attention',
+    checkedAt: 'Checked {{time}}', effective: 'Effective configuration', contentRetention: 'Content retention',
+    persistOn: 'Content persistence enabled', persistOff: 'Global content persistence disabled (employee traffic is still recorded)',
+    guardrails: 'Guardrails', session: 'Session lifetime', bodyLimit: 'Request body limit',
+    configOnly: 'These values come from configuration and are not editable in the console; restart after changing them.',
+    check: {
+      audit_chain: 'Audit chain', bootstrap_password_removed: 'Bootstrap password file', data_protection_keys: 'Data protection keys',
+      content_key: 'Content encryption key', https: 'Transport security', content_retention: 'Content retention', provider_credentials: 'Provider credentials',
+      byok: 'Personal providers', database: 'Database'
+    }
   },
   admin: {
     overviewHint: 'Calls, cost, and blocks across the organization', createProvider: 'Add enterprise provider', createKey: 'Issue application key',

@@ -156,6 +156,8 @@ export const api = {
   usageBreakdown: (days = 7) => request<UsageBreakdown>(`/api/admin/usage/breakdown?days=${days}`),
   capacity: () => request<CapacityReport>('/api/admin/capacity'),
   metrics: (days = 7) => request<MetricsReport>(`/api/admin/metrics?days=${days}`),
+  systemBaseline: () => request<SystemBaseline>('/api/admin/system/baseline'),
+  systemSettings: () => request<SystemSettings>('/api/admin/system/settings'),
   disputeAudit: (eventId: string, body: { disputeType: string; note?: string }) =>
     request<{ ok: boolean }>(`/api/admin/audit/${eventId}/dispute`, {
       method: 'POST',
@@ -766,6 +768,22 @@ export interface MetricsReport {
   by_model: Array<{ model: string; requests: number; errors: number; avg_ms: number; p95_ms: number }>;
   by_provider: Array<{ provider_id?: string | null; provider: string; requests: number; errors: number; avg_ms: number; p95_ms: number }>;
   by_hour: Array<{ hour: number; requests: number; errors: number }>;
+}
+
+export interface SystemBaseline {
+  checked_at: string;
+  healthy: boolean;
+  checks: Array<{ id: string; severity: string; message: string; ok: boolean }>;
+}
+
+export interface SystemSettings {
+  security: { require_https: boolean; session_hours: number; request_body_limit: number; admin_bind_address?: string | null };
+  database: { provider: string; auto_migrate: boolean };
+  content: { persist: boolean; raw_days: number; redacted_days: number; compressed_days: number; max_bytes: number };
+  guardrails: { on_error: string; redaction_mode: string; token_retention_hours: number };
+  personal_providers: { enabled: boolean; allowed_providers: string[]; blocked_users: number };
+  providers: { total: number };
+  note: string;
 }
 
 export interface PolicyRow {

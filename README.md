@@ -49,32 +49,32 @@ docs/                    PRD 与设计文档
 
 ## 已实现
 
-| 能力        | 说明                                                                                                                             |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| 虚拟密钥    | `sk-sh-{env}-{keyId}-{secret}`，只存 SHA-256，常量时间比对，可吊销                                                               |
-| 会话登录    | Cookie 会话 + RBAC（五角色 + EndUser 个人范围）                                                                                  |
-| 数据面      | `POST /v1/chat/completions`（含流式透传）、`GET /v1/models`                                                                      |
-| 三级模型 ID | `[scope/]provider/model`，model 段允许含 `/`；歧义报错并给候选                                                                   |
-| 双账        | `billingOwner = org / user`，按**实际命中成员**记账                                                                              |
-| 护栏        | 身份证（mod 11-2）、手机、银行卡（Luhn）、邮箱、PEM、JWT、高熵密钥                                                               |
-| 脱敏        | 三种模式：`mask`（部分遮蔽）、`placeholder`（占位符）、`tokenize`（可逆令牌，响应自动还原）                                       |
-| 压缩        | 空白/Unicode 规范化、样板文本剥离、重复行折叠 + 完整性校验回退                                                                   |
-| 审计        | 链式哈希 + 逐条校验接口，时间截断到毫秒以保证可复验                                                                              |
-| 内容存储    | AES-256-GCM，AAD 绑定 `requestId · direction · variant`，按变体留存                                                              |
-| 供应商      | 企业级 / 个人 BYOK，凭据 DataProtection 加密                                                                                     |
-| 控制台      | 概览、供应商、密钥、审计（含链校验）、个人工作台、审计助手                                                                    |
-| i18n        | 中/英切换；后端 `Accept-Language` 本地化错误文案，审计只存 code                                                                  |
-| 策略引擎    | 结构化条件（any/all + detector）、scope 通配、优先级、灰度分桶、版本发布与回滚、低置信度 dry-run                                 |
-| 预算与配额  | 组织/团队/应用维度，按日/周/月滚动，超限 429 并写审计                                                                            |
-| 显式模型组  | 具名组优先于同名 offering，成员优先级/权重/健康态驱动，可选跨 scope                                                              |
-| 目录同步    | 每 24h 拉取 models.dev（约 9000+ 模型），失败保留上一份快照，可手动触发                                                          |
-| TOTP        | 可选启用：`enable` 返回 otpauth URI，`activate` 验证后登录需动态码                                                               |
-| 审计导出    | 按时间范围流式导出 NDJSON                                                                                                        |
-| 误报申诉    | 独立追加表记录，不回写审计行                                                                                                     |
-| 审计助手    | MAF 1.28 `ChatClientAgent`；**8 个只读工具**、多轮会话持久化、SSE 流式输出；工具轮数有上限，每次工具调用写审计              |
-| 助手会话    | `AssistantSession` / `AssistantMessage` 落库，历史回放上限可配；会话只属本人，管理员不可读                                                |
-| EF 迁移     | **两个 Provider 各一套迁移**（`Migrations/Sqlite`、`Migrations/Postgres`），同一 `DbContext` 基类 + Provider 绑定子类            |
-| 员工审计    | 员工流量（含 BYOK）**强制记录正文**，与全局 `content.persist` 解耦，不可配降级                                                   |
+| 能力        | 说明                                                                                                                  |
+| ----------- | --------------------------------------------------------------------------------------------------------------------- |
+| 虚拟密钥    | `sk-sh-{env}-{keyId}-{secret}`，只存 SHA-256，常量时间比对，可吊销                                                    |
+| 会话登录    | Cookie 会话 + RBAC（五角色 + EndUser 个人范围）                                                                       |
+| 数据面      | `POST /v1/chat/completions`（含流式透传）、`GET /v1/models`                                                           |
+| 三级模型 ID | `[scope/]provider/model`，model 段允许含 `/`；歧义报错并给候选                                                        |
+| 双账        | `billingOwner = org / user`，按**实际命中成员**记账                                                                   |
+| 护栏        | 身份证（mod 11-2）、手机、银行卡（Luhn）、邮箱、PEM、JWT、高熵密钥                                                    |
+| 脱敏        | 三种模式：`mask`（部分遮蔽）、`placeholder`（占位符）、`tokenize`（可逆令牌，响应自动还原）                           |
+| 压缩        | 空白/Unicode 规范化、样板文本剥离、重复行折叠 + 完整性校验回退                                                        |
+| 审计        | 链式哈希 + 逐条校验接口，时间截断到毫秒以保证可复验                                                                   |
+| 内容存储    | AES-256-GCM，AAD 绑定 `requestId · direction · variant`，按变体留存                                                   |
+| 供应商      | 企业级 / 个人 BYOK，凭据 DataProtection 加密                                                                          |
+| 控制台      | 概览、供应商、密钥、审计（含链校验）、个人工作台、审计助手                                                            |
+| i18n        | 中/英切换；后端 `Accept-Language` 本地化错误文案，审计只存 code                                                       |
+| 策略引擎    | 结构化条件（any/all + detector）、scope 通配、优先级、灰度分桶、版本发布与回滚、低置信度 dry-run                      |
+| 预算与配额  | 组织/团队/应用维度，按日/周/月滚动，超限 429 并写审计                                                                 |
+| 显式模型组  | 具名组优先于同名 offering，成员优先级/权重/健康态驱动，可选跨 scope                                                   |
+| 目录同步    | 每 24h 拉取 models.dev（约 9000+ 模型），失败保留上一份快照，可手动触发                                               |
+| TOTP        | 可选启用：`enable` 返回 otpauth URI，`activate` 验证后登录需动态码                                                    |
+| 审计导出    | 按时间范围流式导出 NDJSON                                                                                             |
+| 误报申诉    | 独立追加表记录，不回写审计行                                                                                          |
+| 审计助手    | MAF 1.28 `ChatClientAgent`；**8 个只读工具**、多轮会话持久化、SSE 流式输出；工具轮数有上限，每次工具调用写审计        |
+| 助手会话    | `AssistantSession` / `AssistantMessage` 落库，历史回放上限可配；会话只属本人，管理员不可读                            |
+| EF 迁移     | **两个 Provider 各一套迁移**（`Migrations/Sqlite`、`Migrations/Postgres`），同一 `DbContext` 基类 + Provider 绑定子类 |
+| 员工审计    | 员工流量（含 BYOK）**强制记录正文**，与全局 `content.persist` 解耦，不可配降级                                        |
 
 ## 未实现
 
@@ -118,22 +118,22 @@ dotnet test
 
 `src/SecureHub.Api/appsettings.json` → `SecureHub` 段：
 
-| 键                          | 说明                                                      |
-| --------------------------- | --------------------------------------------------------- |
-| `Database.Provider`         | `Sqlite` / `Postgres`                                     |
-| `Database.ConnectionString` | SQLite 文件或 PG 连接串                                   |
-| `Security.DataDirectory`    | 数据库、密钥、日志目录                                    |
-| `Content.*RetentionDays`    | 原文 / 脱敏后 / 外发内容留存                              |
-| `Guardrails.OnError`        | `block`（fail-closed）/ `allow`                           |
-| `Compression.Enabled`       | 是否启用文本级压缩                                        |
-| `LoadBalancing.Enabled`     | 是否启用同名模型分流                                      |
-| `PersonalProviders.*`       | BYOK 开关、供应商白名单、禁用用户（审计粒度固定，无开关） |
-| `Assistant.DefaultModel`    | 助手默认模型（三级 ID 或别名）                            |
-| `Assistant.MaxRounds`       | 工具调用轮数上限（1–12，默认 6）                          |
-| `Assistant.MaxHistoryMessages` | 上下文回放的消息条数（默认 12）                        |
-| `Assistant.AllowContentRead` | 是否允许 `read_content` 工具（默认 `false`）              |
-| `Guardrails.RedactionMode`  | `mask` / `placeholder` / `tokenize`（默认 `mask`）        |
-| `Guardrails.TokenRetentionHours` | tokenize 令牌存活期（默认 24h）                     |
+| 键                               | 说明                                                      |
+| -------------------------------- | --------------------------------------------------------- |
+| `Database.Provider`              | `Sqlite` / `Postgres`                                     |
+| `Database.ConnectionString`      | SQLite 文件或 PG 连接串                                   |
+| `Security.DataDirectory`         | 数据库、密钥、日志目录                                    |
+| `Content.*RetentionDays`         | 原文 / 脱敏后 / 外发内容留存                              |
+| `Guardrails.OnError`             | `block`（fail-closed）/ `allow`                           |
+| `Compression.Enabled`            | 是否启用文本级压缩                                        |
+| `LoadBalancing.Enabled`          | 是否启用同名模型分流                                      |
+| `PersonalProviders.*`            | BYOK 开关、供应商白名单、禁用用户（审计粒度固定，无开关） |
+| `Assistant.DefaultModel`         | 助手默认模型（三级 ID 或别名）                            |
+| `Assistant.MaxRounds`            | 工具调用轮数上限（1–12，默认 6）                          |
+| `Assistant.MaxHistoryMessages`   | 上下文回放的消息条数（默认 12）                           |
+| `Assistant.AllowContentRead`     | 是否允许 `read_content` 工具（默认 `false`）              |
+| `Guardrails.RedactionMode`       | `mask` / `placeholder` / `tokenize`（默认 `mask`）        |
+| `Guardrails.TokenRetentionHours` | tokenize 令牌存活期（默认 24h）                           |
 
 ---
 

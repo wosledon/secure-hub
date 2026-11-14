@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Box, Stack, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
@@ -59,7 +59,7 @@ export function ActivityChart({
   const theme = useTheme();
   const format = useFormatters();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+  const [width, setWidth] = useState(640);
   const [hovered, setHovered] = useState<number | null>(null);
   const gradientId = useId().replace(/:/g, '');
   const tooltipDate = useMemo(
@@ -72,14 +72,17 @@ export function ActivityChart({
     [i18n.language]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = containerRef.current;
     if (!element) return;
 
-    const observer = new ResizeObserver((entries) => {
-      const next = entries[0]?.contentRect.width ?? 0;
+    const measure = () => {
+      const next = element.getBoundingClientRect().width;
       if (next > 0) setWidth(next);
-    });
+    };
+    measure();
+
+    const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -125,15 +128,14 @@ export function ActivityChart({
 
   return (
     <Box ref={containerRef} sx={{ position: 'relative', width: '100%', minWidth: 0, minHeight: height }}>
-      {width > 0 && (
-        <svg
-          width={width}
-          height={height}
-          viewBox={`0 0 ${width} ${height}`}
-          role="img"
-          aria-label={ariaLabel}
-          style={{ display: 'block', overflow: 'visible' }}
-        >
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={ariaLabel}
+        style={{ display: 'block', maxWidth: '100%', overflow: 'visible' }}
+      >
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={theme.palette.primary.main} stopOpacity={0.24} />
@@ -262,7 +264,6 @@ export function ActivityChart({
             onPointerLeave={() => setHovered(null)}
           />
         </svg>
-      )}
 
       {active && (
         <Box

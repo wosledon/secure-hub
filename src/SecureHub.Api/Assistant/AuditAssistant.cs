@@ -1,8 +1,9 @@
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using Microsoft.Agents.AI;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using OpenAI;
 using SecureHub.Api.Services;
 using SecureHub.Core.Abstractions;
 using SecureHub.Core.Domain;
@@ -18,21 +19,19 @@ public sealed record AssistantAnswer(
     string Model);
 
 /// <summary>
-/// 审计助手：只读工具 + 有界 tool loop。
-/// 说明：当前用轻量 tool loop（OpenAI function calling）实现，
-/// 待 Microsoft.Agents.AI 稳定后可替换为 ChatClientAgent，接口保持不变。
+/// 审计助手：基于 Microsoft Agent Framework 的 ChatClientAgent。
+/// 工具只读；工具循环由 FunctionInvokingChatClient 限制轮数；每次工具调用写审计。
 /// </summary>
 public sealed class AuditAssistant(
     SecureHubDbContext db,
     RouteResolver router,
     ProviderCredentialStore credentials,
     AuditWriter audit,
-    IHttpClientFactory httpClientFactory,
     IClock clock,
     IOptions<SecureHubOptions> options,
+    ILoggerFactory loggerFactory,
     ILogger<AuditAssistant> logger)
 {
-    private const int MaxRounds = 6;
     private const int MaxToolResultChars = 8_000;
 
     private static readonly string SystemPrompt = """
@@ -57,79 +56,139 @@ public sealed class AuditAssistant(
         }
 
         var (provider, offering, apiKey) = target.Value;
-        var messages = new JsonArray
-        {
-            new JsonObject { ["role"] = "system", ["content"] = SystemPrompt },
-            new JsonObject { ["role"] = "user", ["content"] = question }
-        };
 
         var evidence = new List<string>();
-        var toolCallCount = 0;
+        var toolCalls = 0;
+        var evidenceGate = new object();
 
-        for (var round = 0; round < MaxRounds; round++)
+        void Capture(IReadOnlyList<string> ids)
         {
-            var response = await CallUpstreamAsync(provider, offering, apiKey, messages, ct);
-            if (response is null)
-            {
-                return new AssistantAnswer("上游模型调用失败。", evidence, toolCallCount, offering.UpstreamModel);
-            }
-
-            var message = response["choices"]?[0]?["message"];
-            if (message is null)
-            {
-                return new AssistantAnswer("上游返回了无法解析的响应。", evidence, toolCallCount, offering.UpstreamModel);
-            }
-
-            var toolCalls = message["tool_calls"] as JsonArray;
-            if (toolCalls is null || toolCalls.Count == 0)
-            {
-                var content = message["content"]?.GetValue<string>() ?? "（模型未返回内容）";
-                return new AssistantAnswer(content, evidence.Distinct().ToList(), toolCallCount, offering.UpstreamModel);
-            }
-
-            messages.Add(JsonNode.Parse(message.ToJsonString()));
-
-            foreach (var call in toolCalls)
-            {
-                var name = call?["function"]?["name"]?.GetValue<string>() ?? string.Empty;
-                var args = call?["function"]?["arguments"]?.GetValue<string>() ?? "{}";
-                var callId = call?["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N");
-
-                toolCallCount++;
-                var (result, ids) = await ExecuteToolAsync(name, args, userId, ct);
-                evidence.AddRange(ids);
-
-                await audit.AppendAsync(
-                    AuditEventTypes.AssistantToolInvoked, "user", userId.ToString(), "assistant",
-                    "ok", billingOwner: BillingOwner.User,
-                    configure: e =>
-                    {
-                        e.ModelAlias = offering.UpstreamModel;
-                        e.Detail = JsonSerializer.Serialize(new
-                        {
-                            tool = name,
-                            args_hash = ShortHash(args),
-                            result_chars = result.Length
-                        });
-                    }, ct: ct);
-
-                messages.Add(new JsonObject
-                {
-                    ["role"] = "tool",
-                    ["tool_call_id"] = callId,
-                    ["content"] = result.Length > MaxToolResultChars
-                        ? result[..MaxToolResultChars] + "…(truncated)"
-                        : result
-                });
-            }
+            lock (evidenceGate) evidence.AddRange(ids);
         }
 
-        return new AssistantAnswer(
-            "达到工具调用上限，请缩小问题范围（例如指定时间区间或应用）。",
-            evidence.Distinct().ToList(),
-            toolCallCount,
-            offering.UpstreamModel);
+        var tools = new List<AITool>
+        {
+            AIFunctionFactory.Create(
+                async (int days, string? eventType, int limit) =>
+                {
+                    Interlocked.Increment(ref toolCalls);
+                    var (result, ids) = await SearchAuditEventsAsync(days, eventType, limit, ct);
+                    await RecordToolAsync("search_audit_events", userId, offering.UpstreamModel, result, ct);
+                    Capture(ids);
+                    return Truncate(result);
+                },
+                "search_audit_events",
+                "按时间范围检索审计事件，只返回元数据"),
+
+            AIFunctionFactory.Create(
+                async (int days) =>
+                {
+                    Interlocked.Increment(ref toolCalls);
+                    var (result, ids) = await GetUsageSummaryAsync(days, ct);
+                    await RecordToolAsync("get_usage_summary", userId, offering.UpstreamModel, result, ct);
+                    Capture(ids);
+                    return Truncate(result);
+                },
+                "get_usage_summary",
+                "近 N 天的调用量、token 与成本汇总"),
+
+            AIFunctionFactory.Create(
+                async (string requestId) =>
+                {
+                    Interlocked.Increment(ref toolCalls);
+                    var (result, ids) = await ExplainRequestAsync(requestId, ct);
+                    await RecordToolAsync("explain_request", userId, offering.UpstreamModel, result, ct);
+                    Capture(ids);
+                    return Truncate(result);
+                },
+                "explain_request",
+                "查看单个 requestId 的完整审计链路"),
+
+            AIFunctionFactory.Create(
+                async () =>
+                {
+                    Interlocked.Increment(ref toolCalls);
+                    var (result, ids) = await ListModelsAsync(ct);
+                    await RecordToolAsync("list_models", userId, offering.UpstreamModel, result, ct);
+                    Capture(ids);
+                    return Truncate(result);
+                },
+                "list_models",
+                "列出当前可用的模型与其能力")
+        };
+
+        try
+        {
+            var rawClient = new OpenAIClient(
+                    new System.ClientModel.ApiKeyCredential(apiKey),
+                    new OpenAIClientOptions { Endpoint = new Uri(provider.BaseUrl) })
+                .GetChatClient(offering.UpstreamModel)
+                .AsIChatClient();
+
+            // 有界工具循环：超过轮数直接终止，避免模型无限自我调用。
+            IChatClient chatClient = new FunctionInvokingChatClient(rawClient, loggerFactory)
+            {
+                MaximumIterationsPerRequest = Math.Clamp(options.Value.Assistant.MaxRounds, 1, 12)
+            };
+
+            AIAgent agent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
+            {
+                Name = "AuditAssistant",
+                Description = "Secure Hub audit analyst",
+                ChatOptions = new ChatOptions
+                {
+                    Instructions = SystemPrompt,
+                    Tools = tools,
+                    Temperature = 0.1f
+                }
+            });
+
+            var response = await agent.RunAsync(question, cancellationToken: ct);
+            var text = response.Text;
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                text = "模型未返回内容，请换个问法或缩小范围。";
+            }
+
+            List<string> distinctEvidence;
+            lock (evidenceGate)
+            {
+                distinctEvidence = evidence.Distinct(StringComparer.Ordinal).Take(50).ToList();
+            }
+
+            return new AssistantAnswer(text, distinctEvidence, toolCalls, offering.UpstreamModel);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Assistant run failed");
+            return new AssistantAnswer("助手调用失败，请稍后再试。", [], toolCalls, offering.UpstreamModel);
+        }
     }
+
+    private async Task RecordToolAsync(
+        string tool,
+        Guid userId,
+        string model,
+        string result,
+        CancellationToken ct)
+    {
+        await audit.AppendAsync(
+            AuditEventTypes.AssistantToolInvoked, "user", userId.ToString(), "assistant",
+            "ok", billingOwner: BillingOwner.User,
+            configure: e =>
+            {
+                e.ModelAlias = model;
+                e.Detail = JsonSerializer.Serialize(new { tool, result_chars = result.Length });
+            }, ct: ct);
+    }
+
+    private static string Truncate(string value) =>
+        value.Length > MaxToolResultChars ? value[..MaxToolResultChars] + "…(truncated)" : value;
 
     private async Task<(Provider Provider, ProviderOffering Offering, string ApiKey)?> ResolveTargetAsync(
         string? modelAlias,
@@ -139,29 +198,26 @@ public sealed class AuditAssistant(
             ? options.Value.Assistant.DefaultModel
             : modelAlias;
 
-        var decision = await router.ResolveAsync(
-            string.IsNullOrWhiteSpace(alias) ? "*" : alias,
-            KeyOwnerType.User,
-            Guid.Empty,
-            null,
-            ct);
-
-        ProviderOffering? offering;
         Provider? provider;
+        ProviderOffering? offering;
 
-        if (decision.Success && decision.Candidate is { } candidate)
+        if (!string.IsNullOrWhiteSpace(alias))
         {
-            provider = await db.Providers.FindAsync(new object[] { candidate.ProviderId }, ct);
-            offering = await db.ProviderOfferings.AsNoTracking().FirstOrDefaultAsync(
-                o => o.ProviderId == candidate.ProviderId && o.UpstreamModel == candidate.UpstreamModel, ct);
+            var decision = await router.ResolveAsync(alias, KeyOwnerType.User, Guid.Empty, null, ct);
+            if (decision.Success && decision.Candidate is { } candidate)
+            {
+                provider = await db.Providers.FindAsync(new object[] { candidate.ProviderId }, ct);
+                offering = await db.ProviderOfferings.AsNoTracking().FirstOrDefaultAsync(
+                    o => o.ProviderId == candidate.ProviderId && o.UpstreamModel == candidate.UpstreamModel, ct);
+            }
+            else
+            {
+                (provider, offering) = await FallbackAsync(ct);
+            }
         }
         else
         {
-            // 回退：取第一个可用 offering（冷启动时也能用）
-            offering = await db.ProviderOfferings.AsNoTracking().FirstOrDefaultAsync(o => o.Enabled, ct);
-            provider = offering is null
-                ? null
-                : await db.Providers.FindAsync(new object[] { offering.ProviderId }, ct);
+            (provider, offering) = await FallbackAsync(ct);
         }
 
         if (provider is null || offering is null) return null;
@@ -172,92 +228,25 @@ public sealed class AuditAssistant(
         return (provider, offering, apiKey);
     }
 
-    private async Task<JsonNode?> CallUpstreamAsync(
-        Provider provider,
-        ProviderOffering offering,
-        string apiKey,
-        JsonArray messages,
-        CancellationToken ct)
+    private async Task<(Provider?, ProviderOffering?)> FallbackAsync(CancellationToken ct)
     {
-        var payload = new JsonObject
-        {
-            ["model"] = offering.UpstreamModel,
-            ["messages"] = messages.DeepClone(),
-            ["tools"] = ToolDefinitions(),
-            ["tool_choice"] = "auto",
-            ["temperature"] = 0.1
-        };
+        var offering = await db.ProviderOfferings.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Enabled, ct);
+        if (offering is null) return (null, null);
 
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post, $"{provider.BaseUrl.TrimEnd('/')}/chat/completions")
-        {
-            Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
-        };
-        request.Headers.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-
-        try
-        {
-            var client = httpClientFactory.CreateClient("upstream");
-            using var response = await client.SendAsync(request, ct);
-            if (!response.IsSuccessStatusCode)
-            {
-                logger.LogWarning("Assistant upstream call failed: {Status}", (int)response.StatusCode);
-                return null;
-            }
-
-            var body = await response.Content.ReadAsStringAsync(ct);
-            return JsonNode.Parse(body);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            logger.LogWarning(ex, "Assistant upstream call threw");
-            return null;
-        }
-    }
-
-    private async Task<(string Result, IReadOnlyList<string> Evidence)> ExecuteToolAsync(
-        string name,
-        string argsJson,
-        Guid userId,
-        CancellationToken ct)
-    {
-        JsonNode? args = null;
-        try
-        {
-            args = JsonNode.Parse(string.IsNullOrWhiteSpace(argsJson) ? "{}" : argsJson);
-        }
-        catch (JsonException)
-        {
-            // 忽略，按默认参数处理
-        }
-
-        try
-        {
-            return name switch
-            {
-                "search_audit_events" => await SearchAuditEventsAsync(args, ct),
-                "get_usage_summary" => await GetUsageSummaryAsync(args, ct),
-                "explain_request" => await ExplainRequestAsync(args, ct),
-                "list_models" => await ListModelsAsync(ct),
-                _ => ($"未知工具: {name}", Array.Empty<string>())
-            };
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Tool {Tool} failed", name);
-            return ($"工具执行失败: {ex.Message}", Array.Empty<string>());
-        }
+        var provider = await db.Providers.FindAsync(new object[] { offering.ProviderId }, ct);
+        return (provider, offering);
     }
 
     private async Task<(string, IReadOnlyList<string>)> SearchAuditEventsAsync(
-        JsonNode? args,
+        int days,
+        string? eventType,
+        int limit,
         CancellationToken ct)
     {
-        var days = Math.Clamp(args?["days"]?.GetValue<int>() ?? 7, 1, 30);
-        var eventType = args?["eventType"]?.GetValue<string>();
-        var limit = Math.Clamp(args?["limit"]?.GetValue<int>() ?? 50, 1, 200);
-        var since = clock.UtcNow.AddDays(-days);
+        var window = Math.Clamp(days <= 0 ? 7 : days, 1, 30);
+        var take = Math.Clamp(limit <= 0 ? 50 : limit, 1, 200);
+        var since = clock.UtcNow.AddDays(-window);
 
         var query = db.AuditEvents.AsNoTracking().Where(e => e.OccurredAt >= since);
         if (!string.IsNullOrWhiteSpace(eventType))
@@ -265,14 +254,13 @@ public sealed class AuditAssistant(
             query = query.Where(e => e.EventType == eventType);
         }
 
-        var rows = await query.OrderByDescending(e => e.Sequence).Take(limit).ToListAsync(ct);
+        var rows = await query.OrderByDescending(e => e.Sequence).Take(take).ToListAsync(ct);
 
         var payload = new
         {
-            range_days = days,
+            range_days = window,
             count = rows.Count,
-            by_type = rows.GroupBy(r => r.EventType)
-                .Select(g => new { type = g.Key, count = g.Count() }),
+            by_type = rows.GroupBy(r => r.EventType).Select(g => new { type = g.Key, count = g.Count() }),
             by_rule = rows.Where(r => r.RuleId != null)
                 .GroupBy(r => r.RuleId!)
                 .Select(g => new { rule = g.Key, count = g.Count() }),
@@ -293,12 +281,10 @@ public sealed class AuditAssistant(
         return (JsonSerializer.Serialize(payload), rows.Take(20).Select(r => r.EventId.ToString()).ToList());
     }
 
-    private async Task<(string, IReadOnlyList<string>)> GetUsageSummaryAsync(
-        JsonNode? args,
-        CancellationToken ct)
+    private async Task<(string, IReadOnlyList<string>)> GetUsageSummaryAsync(int days, CancellationToken ct)
     {
-        var days = Math.Clamp(args?["days"]?.GetValue<int>() ?? 7, 1, 30);
-        var since = clock.UtcNow.AddDays(-days);
+        var window = Math.Clamp(days <= 0 ? 7 : days, 1, 30);
+        var since = clock.UtcNow.AddDays(-window);
 
         var rows = await db.UsageEvents.AsNoTracking()
             .Where(e => e.OccurredAt >= since)
@@ -306,7 +292,7 @@ public sealed class AuditAssistant(
 
         var payload = new
         {
-            range_days = days,
+            range_days = window,
             total_requests = rows.Count,
             total_input_tokens = rows.Sum(r => r.InputTokens),
             total_input_tokens_before_compression = rows.Sum(r => r.InputTokensOriginal),
@@ -331,10 +317,9 @@ public sealed class AuditAssistant(
     }
 
     private async Task<(string, IReadOnlyList<string>)> ExplainRequestAsync(
-        JsonNode? args,
+        string requestId,
         CancellationToken ct)
     {
-        var requestId = args?["requestId"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(requestId))
         {
             return ("缺少 requestId 参数。", Array.Empty<string>());
@@ -394,49 +379,5 @@ public sealed class AuditAssistant(
         }).Take(100);
 
         return (JsonSerializer.Serialize(payload), Array.Empty<string>());
-    }
-
-    private static JsonArray ToolDefinitions() =>
-    [
-        Tool("search_audit_events", "按时间范围检索审计事件（只返回元数据，不含正文）",
-            new JsonObject
-            {
-                ["days"] = Prop("integer", "回溯天数，1-30，默认 7"),
-                ["eventType"] = Prop("string", "可选，事件类型过滤，如 guardrail_blocked"),
-                ["limit"] = Prop("integer", "最多返回条数，1-200，默认 50")
-            }),
-        Tool("get_usage_summary", "近 N 天的调用量、token 与成本汇总",
-            new JsonObject { ["days"] = Prop("integer", "回溯天数，1-30，默认 7") }),
-        Tool("explain_request", "查看单个 requestId 的完整审计链路",
-            new JsonObject { ["requestId"] = Prop("string", "请求 ID，形如 req_xxxx") }),
-        Tool("list_models", "列出当前可用的模型与其能力", new JsonObject())
-    ];
-
-    private static JsonObject Tool(string name, string description, JsonObject properties) => new()
-    {
-        ["type"] = "function",
-        ["function"] = new JsonObject
-        {
-            ["name"] = name,
-            ["description"] = description,
-            ["parameters"] = new JsonObject
-            {
-                ["type"] = "object",
-                ["properties"] = properties,
-                ["additionalProperties"] = false
-            }
-        }
-    };
-
-    private static JsonObject Prop(string type, string description) => new()
-    {
-        ["type"] = type,
-        ["description"] = description
-    };
-
-    private static string ShortHash(string value)
-    {
-        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(value));
-        return Convert.ToHexString(bytes)[..16].ToLowerInvariant();
     }
 }

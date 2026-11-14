@@ -36,7 +36,9 @@ export const zhCN = {
     eyebrow: '运行总览', title: 'AI 流量治理，一屏掌握', description: '查看近 7 天企业调用、成本、安全拦截与最新审计动态。',
     requests: '网关请求', tokens: '输入 Token', blocked: '安全拦截', personalBilling: '个人账请求',
     vsProviders: '{{active}} / {{total}} 个供应商启用', acrossModels: '覆盖 {{count}} 个模型', blockRate: '占全部事件 {{value}}%',
-    billingSplit: '企业账 {{org}} · 个人账 {{user}}', activity: '调用活动', activityHint: '近 7 天审计事件分布',
+    billingSplit: '企业账 {{org}} · 个人账 {{user}}', activity: '调用活动', activityHint: '近 7 天网关请求与安全拦截趋势',
+    activityRequests: '网关请求', activityBlocked: '安全拦截', activityTotal: '共 {{total}} 次请求',
+    activityAria: '近 7 天调用活动曲线图，共 {{total}} 次请求',
     billing: '计费归属', billingHint: '按请求数统计', recent: '最新审计', recentHint: '关键路由与安全事件实时留痕',
     security: '安全运行状态', securityHint: '审计链与策略快照', verified: '校验审计链', noData: '还没有调用数据',
     noDataHint: '创建供应商并签发密钥后，这里会展示调用趋势。', healthy: '网关运行正常', requestUnit: '次请求'
@@ -399,7 +401,9 @@ export const en = {
     eyebrow: 'OPERATIONS OVERVIEW', title: 'AI traffic governance at a glance', description: 'Monitor enterprise usage, cost, security blocks, and audit activity over the last 7 days.',
     requests: 'Gateway requests', tokens: 'Input tokens', blocked: 'Security blocks', personalBilling: 'Personal-billing requests',
     vsProviders: '{{active}} of {{total}} providers enabled', acrossModels: 'Across {{count}} models', blockRate: '{{value}}% of all events',
-    billingSplit: 'Org {{org}} · Personal {{user}}', activity: 'Call activity', activityHint: 'Audit events over the last 7 days',
+    billingSplit: 'Org {{org}} · Personal {{user}}', activity: 'Call activity', activityHint: 'Gateway requests and security blocks over the last 7 days',
+    activityRequests: 'Gateway requests', activityBlocked: 'Security blocks', activityTotal: '{{total}} requests total',
+    activityAria: 'Call activity chart for the last 7 days, {{total}} requests total',
     billing: 'Billing ownership', billingHint: 'Share by request count', recent: 'Recent audit activity', recentHint: 'Routing and security events with immutable evidence',
     security: 'Security posture', securityHint: 'Audit chain and policy snapshot', verified: 'Verify audit chain', noData: 'No traffic yet',
     noDataHint: 'Connect a provider and issue a key to see activity here.', healthy: 'Gateway is operational', requestUnit: 'requests'

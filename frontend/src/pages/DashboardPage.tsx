@@ -28,7 +28,8 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, type AuditRow, type KeyRow, type PolicySnapshot, type ProviderRow, type UsageRow } from '../api';
+import { api, type AuditRow, type KeyRow, type PolicySnapshot, type ProviderRow, type UsageBreakdown, type UsageRow } from '../api';
+import { ActivityChart, type ActivityPoint } from '../components/ActivityChart';
 import { EmptyState, ErrorState, PageHeader, StatCard, StatusChip, TableSkeleton } from '../components/ui';
 import { useFormatters } from '../utils/format';
 import { useAuditLabels } from '../utils/audit';
@@ -41,6 +42,7 @@ export default function DashboardPage() {
   const [keys, setKeys] = useState<KeyRow[]>([]);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
+  const [breakdown, setBreakdown] = useState<UsageBreakdown | null>(null);
   const [snapshot, setSnapshot] = useState<PolicySnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,14 +52,15 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [providerRows, keyRows, auditResult, usageResult, snapshotResult] = await Promise.all([
-        api.providers(), api.keys(), api.audit(), api.adminUsage(), api.policySnapshot()
+      const [providerRows, keyRows, auditResult, usageResult, snapshotResult, breakdownResult] = await Promise.all([
+        api.providers(), api.keys(), api.audit(), api.adminUsage(), api.policySnapshot(), api.usageBreakdown(7)
       ]);
       setProviders(providerRows);
       setKeys(keyRows);
       setAudit(auditResult.data);
       setUsage(usageResult.data);
       setSnapshot(snapshotResult);
+      setBreakdown(breakdownResult);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -79,21 +82,32 @@ export default function DashboardPage() {
     return { requests, input, output, cost, org, personal, blocked, models };
   }, [usage, audit]);
 
-  const activity = useMemo(() => {
+  const activity = useMemo<ActivityPoint[]>(() => {
+    const now = new Date();
     const days = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date();
-      date.setHours(0, 0, 0, 0);
-      date.setDate(date.getDate() - (6 - index));
-      return { date, count: 0 };
+      const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (6 - index)));
+      return { date, key: date.toISOString().slice(0, 10), requests: 0, blocked: 0 };
     });
+
+    // 后端按 UTC 日期聚合 by_day；横轴也使用 UTC，避免跨时区错位。
+    const requestsByDay = new Map((breakdown?.by_day ?? []).map((row) => [row.date, row.requests]));
+    for (const day of days) day.requests = requestsByDay.get(day.key) ?? 0;
+
+    const daysByKey = new Map(days.map((day) => [day.key, day]));
     for (const row of audit) {
-      const date = new Date(row.occurredAt);
-      const match = days.find((day) => day.date.toDateString() === date.toDateString());
-      if (match) match.count += 1;
+      if (row.action !== 'block') continue;
+      const day = daysByKey.get(new Date(row.occurredAt).toISOString().slice(0, 10));
+      if (day) day.blocked += 1;
     }
-    const max = Math.max(...days.map((day) => day.count), 1);
-    return { days, max };
-  }, [audit]);
+
+    return days.map(({ date, requests, blocked }) => ({ date, requests, blocked }));
+  }, [audit, breakdown]);
+
+  const activityTotal = useMemo(
+    () => activity.reduce((sum, point) => sum + point.requests, 0),
+    [activity]
+  );
+  const hasBlockedActivity = activity.some((point) => point.blocked > 0);
 
   const runVerify = async () => {
     setVerify(await api.verifyAudit());
@@ -122,24 +136,30 @@ export default function DashboardPage() {
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.7fr) minmax(300px, 0.8fr)' }, gap: 2 }}>
         <Card>
           <CardContent>
-            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={3}>
-              <Box><Typography variant="h2">{t('dashboard.activity')}</Typography><Typography variant="body2" color="text.secondary" mt={0.5}>{t('dashboard.activityHint')}</Typography></Box>
-              <Chip size="small" variant="outlined" label={t('common.last7Days')} />
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2} mb={2}>
+              <Box minWidth={0}>
+                <Typography variant="h2">{t('dashboard.activity')}</Typography>
+                <Typography variant="body2" color="text.secondary" mt={0.5}>{t('dashboard.activityHint')}</Typography>
+                <Stack direction="row" spacing={2} mt={1.25} flexWrap="wrap" useFlexGap>
+                  <ChartLegend color="primary.main" label={t('dashboard.activityRequests')} />
+                  {hasBlockedActivity && <ChartLegend color="error.main" label={t('dashboard.activityBlocked')} dashed />}
+                </Stack>
+              </Box>
+              <Stack alignItems="flex-end" spacing={0.5} flexShrink={0}>
+                <Chip size="small" variant="outlined" label={t('common.last7Days')} />
+                <Typography variant="caption" color="text.secondary">
+                  {t('dashboard.activityTotal', { total: format.number(activityTotal) })}
+                </Typography>
+              </Stack>
             </Stack>
-            {loading ? <TableSkeleton rows={4} columns={7} /> : metrics.requests === 0 && audit.length === 0 ? (
+            {loading ? <TableSkeleton rows={4} columns={7} /> : activityTotal === 0 && !hasBlockedActivity ? (
               <EmptyState compact title={t('dashboard.noData')} description={t('dashboard.noDataHint')} />
             ) : (
-              <Box sx={{ height: 210, display: 'flex', alignItems: 'stretch', gap: { xs: 1, sm: 2 }, pt: 2 }}>
-                {activity.days.map((day, index) => (
-                  <Stack key={day.date.toISOString()} flex={1} alignItems="center" spacing={1} minWidth={0}>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>{day.count}</Typography>
-                    <Box sx={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', bgcolor: 'action.hover', borderRadius: 1.5, overflow: 'hidden' }}>
-                      <Box sx={{ width: '100%', maxWidth: 46, height: `${Math.max(day.count ? 12 : 2, (day.count / activity.max) * 100)}%`, bgcolor: index === 6 ? 'primary.main' : 'primary.light', opacity: index === 6 ? 1 : 0.55, borderRadius: '6px 6px 0 0', transition: 'height 240ms ease' }} />
-                    </Box>
-                    <Typography variant="caption" color="text.secondary" noWrap>{format.day(day.date)}</Typography>
-                  </Stack>
-                ))}
-              </Box>
+              <ActivityChart
+                points={activity}
+                height={230}
+                ariaLabel={t('dashboard.activityAria', { total: format.number(activityTotal) })}
+              />
             )}
           </CardContent>
         </Card>
@@ -209,6 +229,22 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </Box>
+    </Stack>
+  );
+}
+
+function ChartLegend({ color, label, dashed = false }: { color: string; label: string; dashed?: boolean }) {
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center">
+      <Box
+        sx={{
+          width: 16,
+          borderTopWidth: 2,
+          borderTopStyle: dashed ? 'dashed' : 'solid',
+          borderColor: color
+        }}
+      />
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
     </Stack>
   );
 }

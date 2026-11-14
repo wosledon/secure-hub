@@ -8,6 +8,7 @@ import {
   Chip,
   Divider,
   IconButton,
+  LinearProgress,
   Stack,
   Table,
   TableBody,
@@ -21,14 +22,18 @@ import AddIcon from '@mui/icons-material/Add';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import BlockIcon from '@mui/icons-material/Block';
 import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
+import GppGoodIcon from '@mui/icons-material/GppGood';
+import KeyIcon from '@mui/icons-material/Key';
+import MemoryIcon from '@mui/icons-material/Memory';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
+import SpeedIcon from '@mui/icons-material/Speed';
 import TokenOutlinedIcon from '@mui/icons-material/TokenOutlined';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, type AuditRow, type KeyRow, type PolicySnapshot, type ProviderRow, type UsageBreakdown, type UsageRow } from '../api';
+import { api, type AuditRow, type BudgetRow, type KeyRow, type MetricsReport, type PolicySnapshot, type ProviderRow, type UsageBreakdown, type UsageRow } from '../api';
 import { ActivityChart, type ActivityPoint } from '../components/ActivityChart';
 import { EmptyState, ErrorState, PageHeader, StatCard, StatusChip, TableSkeleton } from '../components/ui';
 import { useFormatters } from '../utils/format';
@@ -43,6 +48,8 @@ export default function DashboardPage() {
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [breakdown, setBreakdown] = useState<UsageBreakdown | null>(null);
+  const [telemetry, setTelemetry] = useState<MetricsReport | null>(null);
+  const [budgets, setBudgets] = useState<BudgetRow[]>([]);
   const [snapshot, setSnapshot] = useState<PolicySnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,8 +59,8 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [providerRows, keyRows, auditResult, usageResult, snapshotResult, breakdownResult] = await Promise.all([
-        api.providers(), api.keys(), api.audit(), api.adminUsage(), api.policySnapshot(), api.usageBreakdown(7)
+      const [providerRows, keyRows, auditResult, usageResult, snapshotResult, breakdownResult, metricsResult, budgetRows] = await Promise.all([
+        api.providers(), api.keys(), api.audit(), api.adminUsage(), api.policySnapshot(), api.usageBreakdown(7), api.metrics(7), api.budgets()
       ]);
       setProviders(providerRows);
       setKeys(keyRows);
@@ -61,6 +68,8 @@ export default function DashboardPage() {
       setUsage(usageResult.data);
       setSnapshot(snapshotResult);
       setBreakdown(breakdownResult);
+      setTelemetry(metricsResult);
+      setBudgets(budgetRows);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -108,6 +117,19 @@ export default function DashboardPage() {
     [activity]
   );
   const hasBlockedActivity = activity.some((point) => point.blocked > 0);
+  const topModels = useMemo(
+    () => [...(breakdown?.by_model ?? [])].sort((a, b) => b.requests - a.requests).slice(0, 5),
+    [breakdown]
+  );
+  const maxModelRequests = Math.max(1, ...topModels.map((row) => row.requests));
+  const budgetRows = useMemo(
+    () => budgets.slice(0, 4).map((budget) => {
+      const tokenPercent = budget.tokenLimit ? Math.min(100, (budget.tokensUsed / budget.tokenLimit) * 100) : 0;
+      const costPercent = budget.costLimit ? Math.min(100, (budget.costUsed / budget.costLimit) * 100) : 0;
+      return { ...budget, percent: Math.max(tokenPercent, costPercent) };
+    }),
+    [budgets]
+  );
 
   const runVerify = async () => {
     setVerify(await api.verifyAudit());
@@ -126,11 +148,38 @@ export default function DashboardPage() {
       />
       {error && <ErrorState message={error} retry={() => void load()} />}
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 2 }}>
         <StatCard label={t('dashboard.requests')} value={loading ? '—' : format.number(metrics.requests)} caption={t('dashboard.vsProviders', { active: providers.filter((row) => row.enabled).length, total: providers.length })} icon={<TrendingUpIcon fontSize="small" />} />
         <StatCard label={t('dashboard.tokens')} value={loading ? '—' : format.compact(metrics.input)} caption={t('dashboard.acrossModels', { count: metrics.models })} icon={<TokenOutlinedIcon fontSize="small" />} tone="secondary" />
         <StatCard label={t('usage.totalCost')} value={loading ? '—' : format.currency(metrics.cost)} caption={`${format.compact(metrics.output)} ${t('usage.output')}`} icon={<CurrencyExchangeIcon fontSize="small" />} tone="success" />
         <StatCard label={t('dashboard.blocked')} value={loading ? '—' : format.number(metrics.blocked)} caption={t('dashboard.blockRate', { value: audit.length ? ((metrics.blocked / audit.length) * 100).toFixed(1) : '0.0' })} icon={<BlockIcon fontSize="small" />} tone={metrics.blocked > 0 ? 'warning' : 'primary'} />
+        <StatCard
+          label={t('observability.successRate')}
+          value={loading ? '—' : (telemetry?.summary.requests ?? 0) === 0 ? '—' : `${format.number(telemetry?.summary.success_rate ?? 0)}%`}
+          caption={t('dashboard.errorsCaption', { total: format.number(telemetry?.summary.errors ?? 0) })}
+          icon={<GppGoodIcon fontSize="small" />}
+          tone="success"
+        />
+        <StatCard
+          label={t('observability.p95')}
+          value={loading ? '—' : (telemetry?.summary.requests ?? 0) === 0 ? '—' : `${format.number(telemetry?.summary.p95_ms ?? 0)} ms`}
+          caption={t('dashboard.avgCaption', { value: format.number(telemetry?.summary.avg_ms ?? 0) })}
+          icon={<SpeedIcon fontSize="small" />}
+          tone="secondary"
+        />
+        <StatCard
+          label={t('me.activeKeys')}
+          value={loading ? '—' : format.number(keys.filter((key) => !key.is_revoked).length)}
+          caption={t('dashboard.keysCaption', { total: format.number(keys.length) })}
+          icon={<KeyIcon fontSize="small" />}
+          tone="warning"
+        />
+        <StatCard
+          label={t('dashboard.models')}
+          value={loading ? '—' : format.number(metrics.models)}
+          caption={t('dashboard.modelsCaption', { count: providers.filter((row) => row.enabled).length })}
+          icon={<MemoryIcon fontSize="small" />}
+        />
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.7fr) minmax(300px, 0.8fr)' }, gap: 2 }}>
@@ -182,6 +231,87 @@ export default function DashboardPage() {
               <Typography variant="body2" color="text.secondary">{t('nav.keys')}</Typography>
               <Typography variant="subtitle2">{keys.filter((key) => !key.is_revoked).length} {t('common.active')}</Typography>
             </Stack>
+          </CardContent>
+        </Card>
+      </Box>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.1fr) minmax(0, 1fr)' }, gap: 2 }}>
+        <Card>
+          <CardContent>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+              <Box>
+                <Typography variant="h2">{t('dashboard.topModels')}</Typography>
+                <Typography variant="body2" color="text.secondary" mt={0.5}>{t('dashboard.topModelsHint')}</Typography>
+              </Box>
+              <Button component={RouterLink} to="/usage" size="small" endIcon={<ArrowForwardIcon />}>{t('common.showAll')}</Button>
+            </Stack>
+            {loading ? <TableSkeleton rows={3} columns={2} /> : topModels.length === 0 ? (
+              <EmptyState compact title={t('common.empty')} />
+            ) : (
+              <Stack spacing={2} mt={2}>
+                {topModels.map((row) => (
+                  <Box key={row.model} sx={{ minWidth: 0 }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="baseline" spacing={1.5}>
+                      <Box component="code" sx={{ fontSize: 12, wordBreak: 'break-all' }}>{row.model}</Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                        {t('dashboard.requestsAndCost', { requests: format.number(row.requests), cost: format.currency(row.cost_usd) })}
+                      </Typography>
+                    </Stack>
+                    <LinearProgress
+                      variant="determinate"
+                      value={(row.requests / maxModelRequests) * 100}
+                      sx={{ height: 6, borderRadius: 1, mt: 0.75 }}
+                    />
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+              <Box>
+                <Typography variant="h2">{t('usage.budgets')}</Typography>
+                <Typography variant="body2" color="text.secondary" mt={0.5}>{t('dashboard.budgetsHint')}</Typography>
+              </Box>
+              <Button component={RouterLink} to="/usage" size="small" endIcon={<ArrowForwardIcon />}>{t('dashboard.manageBudgets')}</Button>
+            </Stack>
+            {loading ? <TableSkeleton rows={3} columns={2} /> : budgetRows.length === 0 ? (
+              <EmptyState
+                compact
+                title={t('dashboard.noBudgets')}
+                action={<Button component={RouterLink} to="/usage" size="small" variant="outlined">{t('dashboard.manageBudgets')}</Button>}
+              />
+            ) : (
+              <Stack spacing={2} mt={2}>
+                {budgetRows.map((budget) => (
+                  <Box key={budget.id}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="baseline" spacing={1.5}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {budget.subject === 'org' ? t('usage.org') : budget.subject === 'team' ? t('usage.team') : t('usage.app')}
+                        {budget.subjectId ? ` · ${budget.subjectId.slice(0, 8)}` : ''}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t(`usage.${budget.period}`)} · {budget.percent.toFixed(0)}%
+                      </Typography>
+                    </Stack>
+                    <LinearProgress
+                      variant="determinate"
+                      value={budget.percent}
+                      color={budget.percent >= 90 ? 'error' : budget.percent >= 75 ? 'warning' : 'primary'}
+                      sx={{ height: 6, borderRadius: 1, mt: 0.75 }}
+                    />
+                    <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+                      {format.compact(budget.tokensUsed)} / {budget.tokenLimit ? format.compact(budget.tokenLimit) : '∞'} {t('dashboard.tokenUnit')}
+                      {' · '}
+                      {format.currency(budget.costUsed)} / {budget.costLimit ? format.currency(budget.costLimit) : '∞'}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            )}
           </CardContent>
         </Card>
       </Box>

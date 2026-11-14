@@ -215,6 +215,8 @@ export const api = {
     request<{ ok: boolean }>(`/api/admin/entitlements/${id}`, { method: 'DELETE' }),
   myUsage: () =>
     request<{ data: UsageRow[] }>('/api/me/usage'),
+  myOverview: (days = 30) =>
+    request<PersonalOverview>(`/api/me/overview?days=${days}`),
 
   models: () =>
     request<{ data: ModelRow[] }>('/v1/models', {
@@ -788,6 +790,52 @@ export interface CapacityReport {
   };
   keys: { total: number; active: number; revoked: number; expired: number };
   redaction_tokens: { total: number; expired: number };
+}
+
+export interface PersonalOverview {
+  from: string;
+  days: number;
+  totals: {
+    requests: number;
+    input_tokens: number;
+    output_tokens: number;
+    tokens: number;
+    cost_usd: number;
+    compression_saved_tokens: number;
+    blocked: number;
+    errors: number;
+    success_rate: number;
+    avg_ms: number;
+    p95_ms: number;
+  };
+  by_day: Array<{
+    date: string;
+    requests: number;
+    input_tokens: number;
+    output_tokens: number;
+    cost_usd: number;
+    blocked: number;
+  }>;
+  by_model: Array<{
+    model: string;
+    requests: number;
+    input_tokens: number;
+    output_tokens: number;
+    cost_usd: number;
+  }>;
+  by_provider: Array<{ provider: string; requests: number; cost_usd: number }>;
+  keys: { total: number; active: number };
+  providers: { total: number; enabled: number; healthy: number; aliases: string[] };
+  models: { used: number; available: number };
+  recent: Array<{
+    event_id: string;
+    event_type: string;
+    occurred_at: string;
+    action: string;
+    severity: string;
+    reason_code: string;
+    model_alias?: string | null;
+  }>;
 }
 
 export interface MetricsReport {

@@ -118,6 +118,7 @@ export function ActivityChart({
   const activeY = active ? geometry.y(active.requests) : 0;
   const tooltipBelow = activeY < 92;
   const hasBlocked = points.some((point) => point.blocked > 0);
+  const labelStep = Math.max(1, Math.ceil(points.length / 7));
 
   const handlePointer = (event: ReactPointerEvent<SVGRectElement>) => {
     if (points.length === 0) return;
@@ -200,25 +201,29 @@ export function ActivityChart({
               key={point.date.toISOString()}
               cx={geometry.x(index)}
               cy={geometry.y(point.requests)}
-              r={index === points.length - 1 ? 4 : 3}
+              r={index === points.length - 1 ? 4 : points.length > 14 ? 2.2 : 3}
               fill={theme.palette.primary.main}
               stroke={theme.palette.background.paper}
               strokeWidth={2}
             />
           ))}
 
-          {points.map((point, index) => (
-            <text
-              key={`label-${point.date.toISOString()}`}
-              x={geometry.x(index)}
-              y={height - 8}
-              textAnchor="middle"
-              fontSize={11}
-              fill={theme.palette.text.secondary}
-            >
-              {`${point.date.getUTCMonth() + 1}/${point.date.getUTCDate()}`}
-            </text>
-          ))}
+          {points.map((point, index) => {
+            if (index % labelStep !== 0 && index !== points.length - 1) return null;
+
+            return (
+              <text
+                key={`label-${point.date.toISOString()}`}
+                x={geometry.x(index)}
+                y={height - 8}
+                textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'}
+                fontSize={11}
+                fill={theme.palette.text.secondary}
+              >
+                {`${point.date.getUTCMonth() + 1}/${point.date.getUTCDate()}`}
+              </text>
+            );
+          })}
 
           {hovered !== null && (
             <g pointerEvents="none">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Alert,
   Avatar,
@@ -7,6 +7,8 @@ import {
   Card,
   CardContent,
   Chip,
+  Divider,
+  LinearProgress,
   Stack,
   Table,
   TableBody,
@@ -17,17 +19,23 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import BlockIcon from '@mui/icons-material/Block';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
 import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
+import GppGoodIcon from '@mui/icons-material/GppGood';
 import KeyIcon from '@mui/icons-material/Key';
 import MemoryIcon from '@mui/icons-material/Memory';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import SpeedIcon from '@mui/icons-material/Speed';
 import TokenOutlinedIcon from '@mui/icons-material/TokenOutlined';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, type ModelRow, type MyKeyRow, type MyProviderRow, type UsageRow } from '../api';
+import { api, type ModelRow, type MyKeyRow, type MyProviderRow, type PersonalOverview, type UsageRow } from '../api';
+import { ActivityChart, type ActivityPoint } from '../components/ActivityChart';
 import { CodeBlock, CopyButton, ConfirmDialog, EmptyState, ErrorState, PageHeader, SecretDialog, StatCard, StatusChip, TableSkeleton } from '../components/ui';
 import ProviderOnboardingDialog from '../components/ProviderOnboardingDialog';
+import { useAuditLabels } from '../utils/audit';
 import { useFormatters } from '../utils/format';
 
 const DEVKEY_STORAGE = 'sh.devkey';
@@ -59,67 +67,263 @@ export default function WorkspacePage({ section = 'overview' }: { section?: Work
 function WorkspaceOverview() {
   const { t } = useTranslation();
   const format = useFormatters();
-  const [usage, setUsage] = useState<UsageRow[]>([]);
-  const [providers, setProviders] = useState<MyProviderRow[]>([]);
-  const [keys, setKeys] = useState<MyKeyRow[]>([]);
+  const labels = useAuditLabels();
+  const [overview, setOverview] = useState<PersonalOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([api.myUsage(), api.myProviders(), api.myKeys()])
-      .then(([usageResult, providerRows, keyRows]) => {
-        setUsage(usageResult.data);
-        setProviders(providerRows);
-        setKeys(keyRows);
-      })
+    api.myOverview(30)
+      .then((result) => setOverview(result))
       .catch((err) => setError((err as Error).message))
       .finally(() => setLoading(false));
   }, []);
 
-  const totals = usage.reduce(
-    (sum, row) => ({
-      requests: sum.requests + row.requests,
-      tokens: sum.tokens + row.input_tokens + row.output_tokens,
-      cost: sum.cost + row.cost_usd
-    }),
-    { requests: 0, tokens: 0, cost: 0 }
+  const totals = overview?.totals;
+  const points = useMemo<ActivityPoint[]>(
+    () => (overview?.by_day ?? []).map((row) => ({
+      date: new Date(`${row.date}T00:00:00Z`),
+      requests: row.requests,
+      blocked: row.blocked
+    })),
+    [overview]
   );
-  const activeKeys = keys.filter((key) => !key.is_revoked).length;
-
-  const links = [
-    { to: '/workspace/providers', title: t('me.providers'), hint: t('me.providersHint'), icon: <CloudQueueIcon /> },
-    { to: '/workspace/keys', title: t('me.keys'), hint: t('me.keysHint'), icon: <KeyIcon /> },
-    { to: '/workspace/models', title: t('me.models'), hint: t('me.modelsHint'), icon: <MemoryIcon /> },
-    { to: '/workspace/usage', title: t('me.usage'), hint: t('me.usageHint'), icon: <ReceiptLongIcon /> }
-  ];
+  const topModels = (overview?.by_model ?? []).slice(0, 5);
+  const maxModelRequests = Math.max(1, ...topModels.map((row) => row.requests));
+  const hasTraffic = (totals?.requests ?? 0) > 0 || (totals?.blocked ?? 0) > 0;
+  const blockRate = totals && totals.requests > 0 ? Math.round((totals.blocked / totals.requests) * 1000) / 10 : 0;
 
   return (
     <Stack spacing={3}>
       {error && <ErrorState message={error} />}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
-        <StatCard label={t('usage.totalRequests')} value={loading ? '—' : format.number(totals.requests)} caption={t('common.last30Days')} icon={<ReceiptLongIcon fontSize="small" />} />
-        <StatCard label={t('usage.totalTokens')} value={loading ? '—' : format.compact(totals.tokens)} caption={t('common.last30Days')} icon={<TokenOutlinedIcon fontSize="small" />} tone="secondary" />
-        <StatCard label={t('usage.totalCost')} value={loading ? '—' : format.currency(totals.cost)} caption={t('me.billingUser')} icon={<CurrencyExchangeIcon fontSize="small" />} tone="success" />
-        <StatCard label={t('me.activeKeys')} value={loading ? '—' : format.number(activeKeys)} caption={t('me.providersCount', { count: providers.length })} icon={<KeyIcon fontSize="small" />} tone="warning" />
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 2 }}>
+        <StatCard
+          label={t('usage.totalRequests')}
+          value={loading ? '—' : format.number(totals?.requests ?? 0)}
+          caption={loading ? '—' : (totals?.requests ?? 0) === 0 ? t('me.noCalls') : t('me.successCaption', { value: `${format.number(totals?.success_rate ?? 0)}%` })}
+          icon={<TrendingUpIcon fontSize="small" />}
+        />
+        <StatCard
+          label={t('usage.totalTokens')}
+          value={loading ? '—' : format.compact(totals?.tokens ?? 0)}
+          caption={t('me.tokensSplit', {
+            input: format.compact(totals?.input_tokens ?? 0),
+            output: format.compact(totals?.output_tokens ?? 0)
+          })}
+          icon={<TokenOutlinedIcon fontSize="small" />}
+          tone="secondary"
+        />
+        <StatCard
+          label={t('usage.totalCost')}
+          value={loading ? '—' : format.currency(totals?.cost_usd ?? 0)}
+          caption={t('me.billingUser')}
+          icon={<CurrencyExchangeIcon fontSize="small" />}
+          tone="success"
+        />
+        <StatCard
+          label={t('dashboard.blocked')}
+          value={loading ? '—' : format.number(totals?.blocked ?? 0)}
+          caption={t('me.blockRate', { value: `${format.number(blockRate)}%` })}
+          icon={<BlockIcon fontSize="small" />}
+          tone={totals?.blocked ? 'warning' : 'primary'}
+        />
+        <StatCard
+          label={t('observability.successRate')}
+          value={loading ? '—' : (totals?.requests ?? 0) === 0 ? '—' : `${format.number(totals?.success_rate ?? 0)}%`}
+          caption={t('me.errorsCount', { total: format.number(totals?.errors ?? 0) })}
+          icon={<GppGoodIcon fontSize="small" />}
+          tone="success"
+        />
+        <StatCard
+          label={t('observability.p95')}
+          value={loading ? '—' : (totals?.requests ?? 0) === 0 ? '—' : `${format.number(totals?.p95_ms ?? 0)} ms`}
+          caption={t('me.avgLatency', { value: `${format.number(totals?.avg_ms ?? 0)} ms` })}
+          icon={<SpeedIcon fontSize="small" />}
+          tone="secondary"
+        />
+        <StatCard
+          label={t('me.activeKeys')}
+          value={loading ? '—' : format.number(overview?.keys.active ?? 0)}
+          caption={t('me.keysTotal', { total: format.number(overview?.keys.total ?? 0) })}
+          icon={<KeyIcon fontSize="small" />}
+          tone="warning"
+        />
+        <StatCard
+          label={t('me.modelsUsed')}
+          value={loading ? '—' : format.number(overview?.models.used ?? 0)}
+          caption={t('me.modelsAvailable', { total: format.number(overview?.models.available ?? 0) })}
+          icon={<MemoryIcon fontSize="small" />}
+        />
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
-        {links.map((link) => (
-          <Card key={link.to} component={RouterLink} to={link.to} sx={{ textDecoration: 'none', transition: 'border-color 160ms ease', '&:hover': { borderColor: 'primary.main' } }}>
-            <CardContent>
-              <Stack direction="row" spacing={1.5} alignItems="center">
-                <Box sx={{ width: 38, height: 38, borderRadius: 2, display: 'grid', placeItems: 'center', bgcolor: 'action.hover', color: 'primary.main' }}>{link.icon}</Box>
-                <Box flexGrow={1} minWidth={0}>
-                  <Typography variant="subtitle1">{link.title}</Typography>
-                  <Typography variant="body2" color="text.secondary" noWrap>{link.hint}</Typography>
-                </Box>
-                <ArrowForwardIcon fontSize="small" color="action" />
-              </Stack>
-            </CardContent>
-          </Card>
-        ))}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.6fr) minmax(300px, 0.8fr)' }, gap: 2 }}>
+        <Card>
+          <CardContent>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2} mb={2}>
+              <Box minWidth={0}>
+                <Typography variant="h2">{t('me.activity')}</Typography>
+                <Typography variant="body2" color="text.secondary" mt={0.5}>{t('me.activityHint')}</Typography>
+              </Box>
+              <Chip size="small" variant="outlined" label={t('common.last30Days')} sx={{ flexShrink: 0 }} />
+            </Stack>
+            {loading ? <TableSkeleton rows={4} columns={4} /> : hasTraffic ? (
+              <ActivityChart
+                points={points}
+                height={230}
+                ariaLabel={t('me.activityAria', { total: format.number(totals?.requests ?? 0) })}
+              />
+            ) : (
+              <EmptyState
+                compact
+                title={t('me.usageEmpty')}
+                description={t('me.noTrafficHint')}
+                action={
+                  <Button component={RouterLink} to="/workspace/keys" variant="contained" size="small" startIcon={<AddIcon />}>
+                    {t('me.createMyKey')}
+                  </Button>
+                }
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <Typography variant="h2">{t('me.access')}</Typography>
+            <Typography variant="body2" color="text.secondary" mt={0.5}>{t('me.accessHint')}</Typography>
+            <Stack spacing={2} mt={2.5}>
+              <AccessRow
+                icon={<KeyIcon fontSize="small" />}
+                label={t('me.activeKeys')}
+                value={`${format.number(overview?.keys.active ?? 0)} / ${format.number(overview?.keys.total ?? 0)}`}
+                action={t('me.viewKeys')}
+                to="/workspace/keys"
+              />
+              <AccessRow
+                icon={<CloudQueueIcon fontSize="small" />}
+                label={t('me.providers')}
+                value={`${format.number(overview?.providers.enabled ?? 0)} / ${format.number(overview?.providers.total ?? 0)}`}
+                action={t('me.viewProviders')}
+                to="/workspace/providers"
+              />
+              <AccessRow
+                icon={<MemoryIcon fontSize="small" />}
+                label={t('me.models')}
+                value={`${format.number(overview?.models.available ?? 0)} ${t('me.availableShort')} · ${format.number(overview?.models.used ?? 0)} ${t('me.usedShort')}`}
+                action={t('me.viewModels')}
+                to="/workspace/models"
+              />
+            </Stack>
+            <Divider sx={{ my: 2 }} />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Button component={RouterLink} to="/workspace/keys" variant="contained" startIcon={<AddIcon />}>
+                {t('me.createMyKey')}
+              </Button>
+              <Button component={RouterLink} to="/workspace/providers" variant="outlined" startIcon={<CloudQueueIcon />}>
+                {t('me.createByok')}
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
       </Box>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.1fr) minmax(0, 1fr)' }, gap: 2 }}>
+        <Card>
+          <CardContent>
+            <Typography variant="h2">{t('me.topModels')}</Typography>
+            <Typography variant="body2" color="text.secondary" mt={0.5}>{t('me.topModelsHint')}</Typography>
+            {loading ? <TableSkeleton rows={3} columns={2} /> : topModels.length === 0 ? (
+              <EmptyState compact title={t('me.usageEmpty')} />
+            ) : (
+              <Stack spacing={2} mt={2}>
+                {topModels.map((row) => (
+                  <Box key={row.model} sx={{ minWidth: 0 }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="baseline" spacing={1.5}>
+                      <Box component="code" sx={{ fontSize: 12, wordBreak: 'break-all' }}>{row.model}</Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                        {t('me.requestsAndCost', {
+                          requests: format.number(row.requests),
+                          cost: format.currency(row.cost_usd)
+                        })}
+                      </Typography>
+                    </Stack>
+                    <LinearProgress
+                      variant="determinate"
+                      value={(row.requests / maxModelRequests) * 100}
+                      sx={{ height: 6, borderRadius: 1, mt: 0.75 }}
+                    />
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <Typography variant="h2">{t('me.recentActivity')}</Typography>
+            <Typography variant="body2" color="text.secondary" mt={0.5}>{t('me.recentActivityHint')}</Typography>
+            {loading ? <TableSkeleton rows={3} columns={2} /> : (overview?.recent.length ?? 0) === 0 ? (
+              <EmptyState compact title={t('me.noRecent')} />
+            ) : (
+              <Stack divider={<Divider />} mt={1.5}>
+                {overview?.recent.map((event) => (
+                  <Stack key={event.event_id} direction="row" spacing={1.5} alignItems="center" py={1.25} minWidth={0}>
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        bgcolor: event.action === 'block' ? 'error.main' : event.action === 'redact' ? 'warning.main' : 'success.main'
+                      }}
+                    />
+                    <Box flexGrow={1} minWidth={0}>
+                      <Typography variant="body2" fontWeight={600}>{labels.event(event.event_type)}</Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {format.dateTime(event.occurred_at)}
+                        {event.reason_code ? <> · <Box component="code" sx={{ fontSize: 11 }}>{event.reason_code}</Box></> : null}
+                      </Typography>
+                    </Box>
+                    <StatusChip status={event.action} label={labels.action(event.action)} />
+                  </Stack>
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
+    </Stack>
+  );
+}
+
+function AccessRow({
+  icon,
+  label,
+  value,
+  action,
+  to
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  action: string;
+  to: string;
+}) {
+  return (
+    <Stack direction="row" spacing={1.5} alignItems="center" minWidth={0}>
+      <Box sx={{ width: 34, height: 34, borderRadius: 2, display: 'grid', placeItems: 'center', bgcolor: 'action.hover', color: 'primary.main', flexShrink: 0 }}>
+        {icon}
+      </Box>
+      <Box flexGrow={1} minWidth={0}>
+        <Typography variant="body2" fontWeight={600}>{label}</Typography>
+        <Typography variant="caption" color="text.secondary">{value}</Typography>
+      </Box>
+      <Button component={RouterLink} to={to} size="small" endIcon={<ArrowForwardIcon />}>
+        {action}
+      </Button>
     </Stack>
   );
 }

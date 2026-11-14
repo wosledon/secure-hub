@@ -116,6 +116,7 @@ app.MapKeyConstraints();
 app.MapAuditDeep();
 app.MapUsageInsights();
 app.MapMetrics();
+app.MapPersonalOverview();
 app.MapSystem();
 app.MapRuntimeSettings();
 app.MapMcp();

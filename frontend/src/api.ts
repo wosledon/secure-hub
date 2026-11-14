@@ -223,6 +223,22 @@ export const api = {
 
   policies: () => request<PolicyRow[]>('/api/admin/policies'),
   policySnapshot: () => request<PolicySnapshot>('/api/admin/policies/snapshot'),
+  policyDetectors: () => request<PolicyDetectorInfo[]>('/api/admin/policies/detectors'),
+  testPolicy: (body: PolicyTestBody) =>
+    request<PolicyTestResult>('/api/admin/policies/test', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+  setPolicyEnabled: (policyKey: string, enabled: boolean) =>
+    request<{ policy_key: string; enabled: boolean; snapshot_reloaded: boolean }>(
+      `/api/admin/policies/${encodeURIComponent(policyKey)}/enabled`,
+      { method: 'PUT', body: JSON.stringify({ enabled }) }
+    ),
+  deletePolicy: (policyKey: string) =>
+    request<{ policy_key: string; deleted_versions: number; snapshot_reloaded: boolean }>(
+      `/api/admin/policies/${encodeURIComponent(policyKey)}`,
+      { method: 'DELETE' }
+    ),
   activatePolicy: (policyKey: string, version: number) =>
     request<{ policy_key: string; active_version: number; snapshot_reloaded: boolean }>(
       `/api/admin/policies/${encodeURIComponent(policyKey)}/activate?version=${version}`,
@@ -239,7 +255,7 @@ export const api = {
       body: JSON.stringify({ yaml })
     }),
   publishPolicy: (body: PublishPolicyBody) =>
-    request<{ version: number; snapshot_reloaded: boolean }>('/api/admin/policies', {
+    request<{ version: number; snapshot_reloaded: boolean; error?: string | null }>('/api/admin/policies', {
       method: 'POST',
       body: JSON.stringify(body)
     }),
@@ -549,9 +565,19 @@ export interface PolicySnapshot {
     rollout: number;
     apps: string[];
     teams: string[];
+    models: string[];
     any: string[];
     all: string[];
+    min_matches: Record<string, number>;
+    on_error: string;
   }>;
+}
+
+export interface PolicyDetectorInfo {
+  id: string;
+  category: string;
+  severity: string;
+  sample: string;
 }
 
 export interface PolicyDryRunResult {
@@ -813,32 +839,74 @@ export interface SystemSettings {
   note: string;
 }
 
+export interface PolicyDetectorRequirement {
+  detector: string;
+  min_matches: number;
+}
+
+export interface PolicyVersionRow {
+  version: number;
+  priority: number;
+  scope: { teams: string[]; apps: string[]; models: string[] };
+  when: { any: PolicyDetectorRequirement[]; all: PolicyDetectorRequirement[] };
+  then: { action: string; reason: string; rule_id?: string | null };
+  rollout_percent: number;
+  on_error?: string;
+  change_reason?: string | null;
+  created_at: string;
+  scopeJson?: string;
+  whenJson?: string;
+  thenJson?: string;
+  rolloutJson?: string;
+  onError?: string;
+  createdAt?: string;
+}
+
 export interface PolicyRow {
   policy_key: string;
   enabled: boolean;
   active_version: number | null;
-  versions: Array<{
-    version: number;
-    priority: number;
-    whenJson: string;
-    thenJson: string;
-    scopeJson?: string;
-    rolloutJson?: string;
-    changeReason?: string;
-    onError: string;
-    createdAt: string;
-  }>;
+  versions: PolicyVersionRow[];
 }
 
 export interface PublishPolicyBody {
   policyKey: string;
   priority: number;
   scope?: { teams?: string[]; apps?: string[]; models?: string[] };
-  when?: { any?: Array<{ detector: string; minMatches: number }> };
+  when?: {
+    any?: Array<{ detector: string; minMatches: number }>;
+    all?: Array<{ detector: string; minMatches: number }>;
+  };
   then?: { action: string; reason: string; ruleId?: string };
   onError?: string;
   rolloutPercent?: number;
   changeReason?: string;
+}
+
+export interface PolicyTestBody {
+  policy: PublishPolicyBody;
+  sampleText: string;
+  appName?: string;
+  teamName?: string;
+  model?: string;
+}
+
+export interface PolicyTestResult {
+  detections: Array<{
+    detector: string;
+    rule_id: string;
+    match_count: number;
+    field_path: string;
+    severity: string;
+    sample_hash?: string | null;
+  }>;
+  detector_counts: Record<string, number>;
+  guardrail_action: string;
+  policy_action: string;
+  effective_action: string;
+  scope_matched: boolean;
+  failed_closed: boolean;
+  hits: Array<{ policy_key: string; action: string; reason: string }>;
 }
 
 export interface BudgetRow {

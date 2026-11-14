@@ -42,7 +42,7 @@ export function PageHeader({
       alignItems={{ xs: 'stretch', sm: 'flex-start' }}
       justifyContent="space-between"
     >
-      <Box minWidth={0}>
+      <Box minWidth={0} sx={{ flex: '1 1 auto' }}>
         {eyebrow && (
           <Typography variant="overline" color="primary.main" display="block" mb={0.5}>
             {eyebrow}
@@ -58,7 +58,14 @@ export function PageHeader({
         )}
       </Box>
       {actions && (
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          flexWrap="wrap"
+          useFlexGap
+          sx={{ flexShrink: 0 }}
+        >
           {actions}
         </Stack>
       )}
@@ -91,17 +98,17 @@ export function StatCard({
               {value}
             </Typography>
             {caption && (
-              <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+              <Typography variant="caption" color="text.secondary" display="block" mt={1} sx={{ lineHeight: 1.4 }}>
                 {caption}
               </Typography>
             )}
           </Box>
           <Box
             sx={(theme) => ({
+              display: { xs: 'none', sm: 'grid' },
               width: 38,
               height: 38,
               borderRadius: 10,
-              display: 'grid',
               placeItems: 'center',
               flexShrink: 0,
               color: `${tone}.main`,

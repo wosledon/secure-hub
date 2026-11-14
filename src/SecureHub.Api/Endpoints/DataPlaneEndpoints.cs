@@ -163,6 +163,10 @@ public static class DataPlaneEndpoints
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
+        var detectorCounts = verdict.Detections
+            .GroupBy(d => d.DetectorId, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Sum(d => d.MatchCount), StringComparer.Ordinal);
+
         var policyDecision = PolicyEvaluator.Evaluate(policies.Snapshot, new PolicyEvalContext(
             auth.AppId,
             auth.OwnerType == KeyOwnerType.App ? auth.Label : null,
@@ -171,7 +175,8 @@ public static class DataPlaneEndpoints
             rawModel,
             detectorIds,
             PolicyStore.Bucket(auth.AppId, auth.VirtualKeyId),
-            TimeOnly.FromDateTime(DateTime.UtcNow)));
+            TimeOnly.FromDateTime(DateTime.UtcNow),
+            detectorCounts));
 
         var effectiveAction = (GuardrailAction)Math.Max((int)verdict.Action, (int)policyDecision.Action);
         var firstPolicy = policyDecision.Hits.FirstOrDefault();

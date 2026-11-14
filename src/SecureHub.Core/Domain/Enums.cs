@@ -135,6 +135,7 @@ public static class AuditEventTypes
     public const string PolicyCreated = "policy_created";
     public const string PolicyUpdated = "policy_updated";
     public const string PolicyActivated = "policy_activated";
+    public const string PolicyDeleted = "policy_deleted";
     public const string RouteFailover = "route_failover";
     public const string RouteSelected = "route_selected";
     public const string RouteDenied = "route_denied";

@@ -1,12 +1,15 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SecureHub.Api.Auth;
 using SecureHub.Api.Services;
 using SecureHub.Core.Abstractions;
 using SecureHub.Core.Domain;
+using SecureHub.Core.Localization;
 using SecureHub.Core.Options;
 using SecureHub.Core.Security;
+using SecureHub.Core.Security.Guardrails;
 using SecureHub.Core.Security.Policies;
 using SecureHub.Data;
 
@@ -32,40 +35,62 @@ public sealed record PolicyThenDto(string Action, string Reason, string? RuleId)
 
 public sealed record PolicyYamlRequest(string Yaml);
 
+public sealed record PolicyEnabledRequest(bool Enabled);
+
+public sealed record PolicyTestRequest(
+    PublishPolicyRequest Policy,
+    string SampleText,
+    string? AppName,
+    string? TeamName,
+    string? Model);
+
 public static class PolicyEndpoints
 {
+    private const int MaxSampleLength = 4000;
+
+    private static readonly Regex PolicyKeyPattern =
+        new("^[a-z][a-z0-9-]{1,63}$", RegexOptions.Compiled);
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     public static void MapPolicies(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/policies");
         group.MapGet("", ListAsync);
-        group.MapGet("/snapshot", (PolicyStore store) => Snapshot(store));
+        group.MapGet("/snapshot", Snapshot);
+        group.MapGet("/detectors", Detectors);
         group.MapPost("", PublishAsync);
-        group.MapPost("/{policyKey}/activate", ActivateAsync);
+        group.MapPost("/test", TestAsync);
         group.MapPost("/dry-run", DryRunAsync);
         group.MapPost("/import/preview", PreviewYamlAsync);
+        group.MapPost("/{policyKey}/activate", ActivateAsync);
+        group.MapPut("/{policyKey}/enabled", SetEnabledAsync);
+        group.MapDelete("/{policyKey}", DeleteAsync);
     }
 
-    private static IResult Snapshot(HttpContext http, PolicyStore store) =>
-        Results.Ok(new
-        {
-            count = store.Count,
-            error = store.LastError,
-            policies = store.Snapshot.Select(p => new
-            {
-                policy_key = p.PolicyKey,
-                version = p.Version,
-                priority = p.Priority,
-                action = p.Action.ToString().ToLowerInvariant(),
-                rollout = p.RolloutPercent,
-                apps = p.Scope.Apps,
-                teams = p.Scope.Teams,
-                any = p.Condition.Any.Select(d => d.Detector),
-                all = p.Condition.All.Select(d => d.Detector)
-            })
-        });
+    private static IResult Detectors(HttpContext http, SessionStore sessions,
+        IOptions<SecureHubOptions> options)
+    {
+        if (!Require(http, sessions, options.Value, Permission.SecurityRead)) return Results.Empty;
 
-    private static IResult Snapshot(PolicyStore store) =>
-        Results.Ok(new
+        return Results.Ok(DetectorCatalog.All.Select(detector => new
+        {
+            id = detector.Id,
+            category = detector.Category,
+            severity = detector.Severity.ToString().ToLowerInvariant(),
+            sample = detector.Sample
+        }));
+    }
+
+    private static IResult Snapshot(HttpContext http, SessionStore sessions,
+        PolicyStore store, IOptions<SecureHubOptions> options)
+    {
+        if (!Require(http, sessions, options.Value, Permission.SecurityRead)) return Results.Empty;
+
+        return Results.Ok(new
         {
             count = store.Count,
             error = store.LastError,
@@ -78,10 +103,15 @@ public static class PolicyEndpoints
                 rollout = p.RolloutPercent,
                 apps = p.Scope.Apps,
                 teams = p.Scope.Teams,
+                models = p.Scope.Models,
                 any = p.Condition.Any.Select(d => d.Detector),
-                all = p.Condition.All.Select(d => d.Detector)
+                all = p.Condition.All.Select(d => d.Detector),
+                min_matches = p.Condition.Any.Concat(p.Condition.All)
+                    .ToDictionary(d => d.Detector, d => Math.Max(1, d.MinMatches)),
+                on_error = p.OnError
             })
         });
+    }
 
     private static void NormalizeScalars(System.Text.Json.Nodes.JsonNode? node)
     {
@@ -185,7 +215,7 @@ public static class PolicyEndpoints
 
     private static async Task ListAsync(
         HttpContext http, SessionStore sessions, SecureHubDbContext db,
-        PolicyStore store, IOptions<SecureHubOptions> options, CancellationToken ct)
+        IOptions<SecureHubOptions> options, CancellationToken ct)
     {
         if (!Require(http, sessions, options.Value, Permission.SecurityRead)) return;
 
@@ -200,37 +230,71 @@ public static class PolicyEndpoints
             versions = versions
                 .Where(v => v.PolicyId == p.Id)
                 .OrderByDescending(v => v.Version)
-                .Select(v => new
-                {
-                    v.Version,
-                    v.Priority,
-                    v.ScopeJson,
-                    v.WhenJson,
-                    v.ThenJson,
-                    v.OnError,
-                    v.RolloutJson,
-                    v.ChangeReason,
-                    v.CreatedAt
-                })
+                .Select(ToVersionDto)
         }), ct);
     }
 
+    private static object ToVersionDto(SecurityPolicyVersion version)
+    {
+        var scope = Deserialize<PolicyScope>(version.ScopeJson) ?? new PolicyScope();
+        var condition = Deserialize<PolicyCondition>(version.WhenJson) ?? new PolicyCondition();
+        var then = Deserialize<PolicyThen>(version.ThenJson) ?? new PolicyThen();
+        var rollout = Deserialize<PolicyRollout>(version.RolloutJson)?.Percent ?? 100;
+
+        return new
+        {
+            version = version.Version,
+            priority = version.Priority,
+            scope = new
+            {
+                teams = scope.Teams,
+                apps = scope.Apps,
+                models = scope.Models
+            },
+            when = new
+            {
+                any = condition.Any.Select(ToRequirementDto),
+                all = condition.All.Select(ToRequirementDto)
+            },
+            then = new
+            {
+                action = then.Action,
+                reason = then.Reason,
+                rule_id = then.RuleId
+            },
+            rollout_percent = Math.Clamp(rollout, 0, 100),
+            on_error = version.OnError,
+            change_reason = version.ChangeReason,
+            created_at = version.CreatedAt,
+            // 原始 JSON 保留给高级用户和导入导出，避免控制台猜测结构。
+            scopeJson = version.ScopeJson,
+            whenJson = version.WhenJson,
+            thenJson = version.ThenJson,
+            rolloutJson = version.RolloutJson,
+            onError = version.OnError,
+            createdAt = version.CreatedAt
+        };
+    }
+
+    private static object ToRequirementDto(DetectorRequirement requirement) => new
+    {
+        detector = requirement.Detector,
+        min_matches = Math.Max(1, requirement.MinMatches)
+    };
+
     private static async Task PublishAsync(
         HttpContext http, PublishPolicyRequest request, SessionStore sessions,
-        SecureHubDbContext db, PolicyStore store, IClock clock,
+        SecureHubDbContext db, PolicyStore store, AuditWriter audit, IClock clock,
         IOptions<SecureHubOptions> options, CancellationToken ct)
     {
         if (!Require(http, sessions, options.Value, Permission.SecurityWrite)) return;
         var localizer = ApiLocalization.For(http, options);
         var session = sessions.Get(SessionCookie.Read(http))!;
 
-        if (string.IsNullOrWhiteSpace(request.PolicyKey))
-        {
-            await ApiError.Create(400, "validation.required", localizer).ExecuteAsync(http);
-            return;
-        }
+        if (!await ValidateDraftAsync(http, request, localizer)) return;
 
         var policy = await db.SecurityPolicies.FirstOrDefaultAsync(p => p.PolicyKey == request.PolicyKey, ct);
+        var created = policy is null;
         if (policy is null)
         {
             policy = new SecurityPolicy
@@ -247,52 +311,18 @@ public static class PolicyEndpoints
             .Select(v => (int?)v.Version)
             .MaxAsync(ct) ?? 0) + 1;
 
-        var scopeJson = JsonSerializer.Serialize(new PolicyScope
-        {
-            Teams = request.Scope?.Teams ?? [],
-            Apps = request.Scope?.Apps ?? [],
-            Models = request.Scope?.Models ?? []
-        });
-
-        var whenJson = JsonSerializer.Serialize(new PolicyCondition
-        {
-            Any = (request.When?.Any ?? []).Select(d => new DetectorRequirement
-            {
-                Detector = d.Detector,
-                MinMatches = d.MinMatches
-            }).ToArray(),
-            All = (request.When?.All ?? []).Select(d => new DetectorRequirement
-            {
-                Detector = d.Detector,
-                MinMatches = d.MinMatches
-            }).ToArray()
-        });
-
-        var then = request.Then ?? new PolicyThenDto("block", "policy_matched", null);
-        var thenJson = JsonSerializer.Serialize(new PolicyThen
-        {
-            Action = then.Action,
-            Reason = then.Reason,
-            RuleId = then.RuleId
-        });
-
-        if (request.RolloutPercent is < 0 or > 100)
-        {
-            await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
-            return;
-        }
-
+        var then = BuildThen(request);
         db.SecurityPolicyVersions.Add(new SecurityPolicyVersion
         {
             PolicyId = policy.Id,
             Version = nextVersion,
             Priority = request.Priority,
-            ScopeJson = scopeJson,
-            WhenJson = whenJson,
-            ThenJson = thenJson,
+            ScopeJson = JsonSerializer.Serialize(BuildScope(request)),
+            WhenJson = JsonSerializer.Serialize(BuildCondition(request)),
+            ThenJson = JsonSerializer.Serialize(then),
             OnError = string.Equals(request.OnError, "allow", StringComparison.OrdinalIgnoreCase) ? "allow" : "block",
             RolloutJson = JsonSerializer.Serialize(new PolicyRollout { Percent = request.RolloutPercent ?? 100 }),
-            ChangeReason = request.ChangeReason ?? string.Empty,
+            ChangeReason = request.ChangeReason?.Trim() ?? string.Empty,
             CreatedBy = session.UserId,
             CreatedAt = clock.UtcNow
         });
@@ -301,6 +331,17 @@ public static class PolicyEndpoints
         await db.SaveChangesAsync(ct);
 
         var refreshed = await store.RefreshAsync(ct);
+
+        await audit.AppendAsync(
+            created ? AuditEventTypes.PolicyCreated : AuditEventTypes.PolicyUpdated,
+            "user", session.UserId.ToString(), session.UserName, "ok",
+            configure: e => e.Detail = JsonSerializer.Serialize(new
+            {
+                policy_key = policy.PolicyKey,
+                version = nextVersion,
+                action = then.Action,
+                priority = request.Priority
+            }), ct: ct);
 
         await http.Response.WriteAsJsonAsync(new
         {
@@ -311,13 +352,108 @@ public static class PolicyEndpoints
         }, ct);
     }
 
+    private static async Task TestAsync(
+        HttpContext http, PolicyTestRequest request, SessionStore sessions,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (!Require(http, sessions, options.Value, Permission.SecurityRead)) return;
+        var localizer = ApiLocalization.For(http, options);
+
+        if (request.Policy is null)
+        {
+            await ApiError.Create(400, "validation.required", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        if (!await ValidateDraftAsync(http, request.Policy, localizer)) return;
+
+        if (string.IsNullOrWhiteSpace(request.SampleText))
+        {
+            await ApiError.Create(400, "validation.required", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        var sample = request.SampleText.Length > MaxSampleLength
+            ? request.SampleText[..MaxSampleLength]
+            : request.SampleText;
+
+        // 试跑使用真实检测器，但给足预算，避免交互式测试被线上 8ms 预算干扰。
+        var pipeline = new GuardrailPipeline(
+            [new PiiDetector(), new SecretDetector()],
+            new GuardrailOptionsLike(2000, 1000, "block"));
+
+        var verdict = await pipeline.RunAsync(
+            [("sample", sample)], GuardrailDirection.Inbound, ct);
+
+        var counts = verdict.Detections
+            .GroupBy(d => d.DetectorId, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Sum(d => d.MatchCount), StringComparer.Ordinal);
+
+        var scope = BuildScope(request.Policy);
+        var condition = BuildCondition(request.Policy);
+        var then = BuildThen(request.Policy);
+
+        var draft = new CompiledPolicy(
+            request.Policy.PolicyKey,
+            Version: 0,
+            request.Policy.Priority,
+            Enabled: true,
+            scope,
+            condition,
+            PolicyActionParser.Parse(then.Action),
+            then.Reason,
+            then.RuleId,
+            Math.Clamp(request.Policy.RolloutPercent ?? 100, 0, 100),
+            "block");
+
+        var context = new PolicyEvalContext(
+            null,
+            request.AppName,
+            null,
+            request.TeamName,
+            request.Model,
+            counts.Keys.ToArray(),
+            Bucket: 0,
+            TimeOnly.FromDateTime(DateTime.UtcNow),
+            counts);
+
+        var decision = PolicyEvaluator.Evaluate([draft], context);
+        var effective = (GuardrailAction)Math.Max((int)verdict.Action, (int)decision.Action);
+
+        await http.Response.WriteAsJsonAsync(new
+        {
+            detections = verdict.Detections.Select(d => new
+            {
+                detector = d.DetectorId,
+                rule_id = d.RuleId,
+                match_count = d.MatchCount,
+                field_path = d.FieldPath,
+                severity = d.Severity.ToString().ToLowerInvariant(),
+                sample_hash = d.SampleHash
+            }),
+            detector_counts = counts,
+            guardrail_action = verdict.Action.ToString().ToLowerInvariant(),
+            policy_action = decision.Action.ToString().ToLowerInvariant(),
+            effective_action = effective.ToString().ToLowerInvariant(),
+            scope_matched = PolicyEvaluator.ScopeMatches(scope, context),
+            failed_closed = verdict.FailedClosed,
+            hits = decision.Hits.Select(h => new
+            {
+                policy_key = h.PolicyKey,
+                action = h.Action.ToString().ToLowerInvariant(),
+                reason = h.Reason
+            })
+        }, ct);
+    }
+
     private static async Task ActivateAsync(
         HttpContext http, string policyKey, int? version, SessionStore sessions,
-        SecureHubDbContext db, PolicyStore store, IOptions<SecureHubOptions> options,
-        CancellationToken ct)
+        SecureHubDbContext db, PolicyStore store, AuditWriter audit,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
     {
         if (!Require(http, sessions, options.Value, Permission.SecurityWrite)) return;
         var localizer = ApiLocalization.For(http, options);
+        var session = sessions.Get(SessionCookie.Read(http))!;
 
         var policy = await db.SecurityPolicies.FirstOrDefaultAsync(p => p.PolicyKey == policyKey, ct);
         if (policy is null)
@@ -338,10 +474,101 @@ public static class PolicyEndpoints
         await db.SaveChangesAsync(ct);
         var refreshed = await store.RefreshAsync(ct);
 
+        await audit.AppendAsync(
+            AuditEventTypes.PolicyActivated,
+            "user", session.UserId.ToString(), session.UserName, "ok",
+            configure: e => e.Detail = JsonSerializer.Serialize(new
+            {
+                policy_key = policy.PolicyKey,
+                version = target
+            }), ct: ct);
+
         await http.Response.WriteAsJsonAsync(new
         {
             policy_key = policy.PolicyKey,
             active_version = target,
+            snapshot_reloaded = refreshed
+        }, ct);
+    }
+
+    private static async Task SetEnabledAsync(
+        HttpContext http, string policyKey, PolicyEnabledRequest request, SessionStore sessions,
+        SecureHubDbContext db, PolicyStore store, AuditWriter audit,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (!Require(http, sessions, options.Value, Permission.SecurityWrite)) return;
+        var localizer = ApiLocalization.For(http, options);
+        var session = sessions.Get(SessionCookie.Read(http))!;
+
+        var policy = await db.SecurityPolicies.FirstOrDefaultAsync(p => p.PolicyKey == policyKey, ct);
+        if (policy is null)
+        {
+            await ApiError.Create(404, "validation.invalid", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        policy.Enabled = request.Enabled;
+        await db.SaveChangesAsync(ct);
+        var refreshed = await store.RefreshAsync(ct);
+
+        await audit.AppendAsync(
+            AuditEventTypes.PolicyUpdated,
+            "user", session.UserId.ToString(), session.UserName, "ok",
+            configure: e => e.Detail = JsonSerializer.Serialize(new
+            {
+                policy_key = policy.PolicyKey,
+                enabled = policy.Enabled
+            }), ct: ct);
+
+        await http.Response.WriteAsJsonAsync(new
+        {
+            policy_key = policy.PolicyKey,
+            enabled = policy.Enabled,
+            snapshot_reloaded = refreshed
+        }, ct);
+    }
+
+    private static async Task DeleteAsync(
+        HttpContext http, string policyKey, SessionStore sessions,
+        SecureHubDbContext db, PolicyStore store, AuditWriter audit,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (!Require(http, sessions, options.Value, Permission.SecurityWrite)) return;
+        var localizer = ApiLocalization.For(http, options);
+        var session = sessions.Get(SessionCookie.Read(http))!;
+
+        var policy = await db.SecurityPolicies.FirstOrDefaultAsync(p => p.PolicyKey == policyKey, ct);
+        if (policy is null)
+        {
+            await ApiError.Create(404, "validation.invalid", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        var versions = await db.SecurityPolicyVersions
+            .Where(v => v.PolicyId == policy.Id)
+            .ToListAsync(ct);
+
+        var versionCount = versions.Count;
+        db.SecurityPolicyVersions.RemoveRange(versions);
+        db.SecurityPolicies.Remove(policy);
+        await db.SaveChangesAsync(ct);
+
+        var refreshed = await store.RefreshAsync(ct);
+
+        await audit.AppendAsync(
+            AuditEventTypes.PolicyDeleted,
+            "user", session.UserId.ToString(), session.UserName, "ok",
+            severity: AuditSeverity.Warning,
+            configure: e => e.Detail = JsonSerializer.Serialize(new
+            {
+                policy_key = policyKey,
+                versions = versionCount
+            }), ct: ct);
+
+        await http.Response.WriteAsJsonAsync(new
+        {
+            policy_key = policyKey,
+            deleted_versions = versionCount,
             snapshot_reloaded = refreshed
         }, ct);
     }
@@ -363,7 +590,10 @@ public static class PolicyEndpoints
             .Take(1000)
             .ToListAsync(ct);
 
-        var required = (request.When?.Any ?? []).Select(d => d.Detector).ToArray();
+        var required = (request.When?.Any ?? []).Select(d => d.Detector)
+            .Concat((request.When?.All ?? []).Select(d => d.Detector))
+            .ToArray();
+
         var affected = events.Count(e => e.RuleId is not null && required.Any(r =>
             e.RuleId.StartsWith(r, StringComparison.OrdinalIgnoreCase)));
 
@@ -374,6 +604,108 @@ public static class PolicyEndpoints
             confidence = "low",
             note = "基于审计中已记录的 detector 命中估算；未落盘的检测明细无法参与回放。"
         }, ct);
+    }
+
+    private static async Task<bool> ValidateDraftAsync(
+        HttpContext http, PublishPolicyRequest request, ILocalizer localizer)
+    {
+        if (!PolicyKeyPattern.IsMatch(request.PolicyKey ?? string.Empty))
+        {
+            await ApiError.Create(400, "validation.policy_key", localizer).ExecuteAsync(http);
+            return false;
+        }
+
+        if (request.Priority is < 0 or > 1000)
+        {
+            await ApiError.Create(400, "validation.policy_priority", localizer).ExecuteAsync(http);
+            return false;
+        }
+
+        var action = (request.Then?.Action ?? "block").Trim().ToLowerInvariant();
+        if (action is not ("block" or "redact" or "alert"))
+        {
+            await ApiError.Create(400, "validation.policy_action", localizer).ExecuteAsync(http);
+            return false;
+        }
+
+        var any = request.When?.Any ?? [];
+        var all = request.When?.All ?? [];
+        foreach (var requirement in any.Concat(all))
+        {
+            if (!DetectorCatalog.Contains(requirement.Detector))
+            {
+                await ApiError.Create(400, "validation.detector_unknown", localizer).ExecuteAsync(http);
+                return false;
+            }
+
+            if (requirement.MinMatches is < 0 or > 100)
+            {
+                await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
+                return false;
+            }
+        }
+
+        var hasScope =
+            (request.Scope?.Teams?.Length ?? 0) > 0 ||
+            (request.Scope?.Apps?.Length ?? 0) > 0 ||
+            (request.Scope?.Models?.Length ?? 0) > 0;
+
+        if (!hasScope && any.Length == 0 && all.Length == 0)
+        {
+            await ApiError.Create(400, "validation.policy_condition_empty", localizer).ExecuteAsync(http);
+            return false;
+        }
+
+        return true;
+    }
+
+    private static PolicyScope BuildScope(PublishPolicyRequest request) => new()
+    {
+        Teams = request.Scope?.Teams ?? [],
+        Apps = request.Scope?.Apps ?? [],
+        Models = request.Scope?.Models ?? []
+    };
+
+    private static PolicyCondition BuildCondition(PublishPolicyRequest request) => new()
+    {
+        Any = (request.When?.Any ?? []).Select(d => new DetectorRequirement
+        {
+            Detector = d.Detector,
+            MinMatches = Math.Max(1, d.MinMatches)
+        }).ToArray(),
+        All = (request.When?.All ?? []).Select(d => new DetectorRequirement
+        {
+            Detector = d.Detector,
+            MinMatches = Math.Max(1, d.MinMatches)
+        }).ToArray()
+    };
+
+    private static PolicyThen BuildThen(PublishPolicyRequest request)
+    {
+        var action = (request.Then?.Action ?? "block").Trim().ToLowerInvariant();
+        var firstDetector = request.When?.Any?.FirstOrDefault()?.Detector
+            ?? request.When?.All?.FirstOrDefault()?.Detector;
+
+        return new PolicyThen
+        {
+            Action = action,
+            Reason = string.IsNullOrWhiteSpace(request.Then?.Reason) ? "policy_matched" : request.Then!.Reason,
+            RuleId = string.IsNullOrWhiteSpace(request.Then?.RuleId) ? firstDetector : request.Then!.RuleId
+        };
+    }
+
+    private static T? Deserialize<T>(string? json) where T : class
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static bool Require(

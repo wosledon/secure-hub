@@ -58,7 +58,8 @@ public sealed record PolicyEvalContext(
     string? Model,
     IReadOnlyCollection<string> Detectors,
     int Bucket,
-    TimeOnly Now);
+    TimeOnly Now,
+    IReadOnlyDictionary<string, int>? DetectorCounts = null);
 
 public sealed record PolicyHit(
     string PolicyKey,
@@ -93,7 +94,7 @@ public static class PolicyEvaluator
         {
             if (!ScopeMatches(policy.Scope, context)) continue;
             if (policy.RolloutPercent < 100 && context.Bucket >= policy.RolloutPercent) continue;
-            if (!ConditionMatches(policy.Condition, context.Detectors)) continue;
+            if (!ConditionMatches(policy.Condition, context)) continue;
 
             hits.Add(new PolicyHit(policy.PolicyKey, policy.Version, policy.RuleId, policy.Action, policy.Reason));
         }
@@ -105,7 +106,7 @@ public static class PolicyEvaluator
         return new PolicyDecision(action, hits);
     }
 
-    private static bool ScopeMatches(PolicyScope scope, PolicyEvalContext context)
+    public static bool ScopeMatches(PolicyScope scope, PolicyEvalContext context)
     {
         // scope 中写的是人可读的名称（app-*、team-research）；缺名称时回退到 Id。
         if (!MatchesAny(scope.Teams, context.TeamName ?? context.TeamId?.ToString())) return false;
@@ -150,7 +151,7 @@ public static class PolicyEvaluator
         return string.Equals(pattern, value, StringComparison.Ordinal);
     }
 
-    private static bool ConditionMatches(PolicyCondition condition, IReadOnlyCollection<string> detectors)
+    private static bool ConditionMatches(PolicyCondition condition, PolicyEvalContext context)
     {
         var hasAll = condition.All.Length > 0;
         var hasAny = condition.Any.Length > 0;
@@ -159,15 +160,25 @@ public static class PolicyEvaluator
         // 空 scope + 空 when 会命中全部请求，属于显式配置错误，由管理端校验提示。
         if (!hasAll && !hasAny) return true;
 
-        if (hasAll && !condition.All.All(requirement => Satisfied(requirement, detectors))) return false;
+        if (hasAll && !condition.All.All(requirement => Satisfied(requirement, context))) return false;
 
-        if (hasAny) return condition.Any.Any(requirement => Satisfied(requirement, detectors));
+        if (hasAny) return condition.Any.Any(requirement => Satisfied(requirement, context));
 
         return true;
     }
 
-    private static bool Satisfied(DetectorRequirement requirement, IReadOnlyCollection<string> detectors) =>
-        requirement.MinMatches <= 0 || detectors.Contains(requirement.Detector, StringComparer.Ordinal);
+    private static bool Satisfied(DetectorRequirement requirement, PolicyEvalContext context)
+    {
+        var threshold = Math.Max(1, requirement.MinMatches);
+
+        if (context.DetectorCounts is not null)
+        {
+            return context.DetectorCounts.TryGetValue(requirement.Detector, out var count) &&
+                   count >= threshold;
+        }
+
+        return context.Detectors.Contains(requirement.Detector, StringComparer.Ordinal);
+    }
 }
 
 public static class PolicyActionParser

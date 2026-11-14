@@ -35,8 +35,9 @@ public class PolicyEvaluatorTests
         Guid? appId = null,
         int bucket = 0,
         string? model = "gpt-4o",
-        string? appName = null) =>
-        new(appId, appName, null, null, model, detectors, bucket, new TimeOnly(10, 0));
+        string? appName = null,
+        IReadOnlyDictionary<string, int>? counts = null) =>
+        new(appId, appName, null, null, model, detectors, bucket, new TimeOnly(10, 0), counts);
 
     [Theory]
     [InlineData("app-*", "app-1", true)]
@@ -148,5 +149,27 @@ public class PolicyEvaluatorTests
 
         var decision = PolicyEvaluator.Evaluate([low, high], Context(["pii.email"]));
         Assert.Equal("high", decision.Hits[0].PolicyKey);
+    }
+
+    [Fact]
+    public void Match_threshold_requires_enough_occurrences()
+    {
+        var policy = new CompiledPolicy(
+            "threshold", Version: 1, Priority: 100, Enabled: true,
+            new PolicyScope(),
+            new PolicyCondition
+            {
+                Any = [new DetectorRequirement { Detector = "pii.email", MinMatches = 2 }]
+            },
+            GuardrailAction.Alert, Reason: "test", RuleId: "pii.email",
+            RolloutPercent: 100, OnError: "block");
+
+        Assert.Equal(GuardrailAction.Allow, PolicyEvaluator.Evaluate(
+            [policy],
+            Context(["pii.email"], counts: new Dictionary<string, int> { ["pii.email"] = 1 })).Action);
+
+        Assert.Equal(GuardrailAction.Alert, PolicyEvaluator.Evaluate(
+            [policy],
+            Context(["pii.email"], counts: new Dictionary<string, int> { ["pii.email"] = 2 })).Action);
     }
 }

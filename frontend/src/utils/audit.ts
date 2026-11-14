@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 export const auditEventTypes = [
   'auth_succeeded', 'auth_failed', 'key_created', 'key_rotated', 'key_revoked', 'access_denied',
   'guardrail_blocked', 'guardrail_redacted', 'guardrail_alert', 'guardrail_error',
-  'policy_created', 'policy_updated', 'policy_activated', 'route_failover', 'route_selected',
+  'policy_created', 'policy_updated', 'policy_activated', 'policy_deleted', 'route_failover', 'route_selected',
   'route_denied', 'quota_exceeded', 'compression_applied', 'compression_rolled_back',
   'content_viewed', 'content_write_failed', 'data_exported', 'provider_created',
   'provider_credential_updated', 'catalog_synced', 'byok_enabled', 'assistant_tool_invoked',

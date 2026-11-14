@@ -30,6 +30,7 @@ public static class DataPlaneEndpoints
         GuardrailPipeline guardrails,
         RouteResolver router,
         ContentStore content,
+        RedactionTokenStore redactionTokens,
         AuditWriter audit,
         PolicyStore policies,
         BudgetGuard budgets,
@@ -171,10 +172,21 @@ public static class DataPlaneEndpoints
             return;
         }
 
-        // 5) 脱敏
+        // 5) 脱敏（mask / placeholder 不可逆；tokenize 可还原）
+        var redactionMode = RedactionTokenStore.ParseMode(options.Value.Guardrails.RedactionMode);
+        var tokenizedCount = 0;
+
         if (effectiveAction == GuardrailAction.Redact)
         {
-            RedactInPlace(root!, verdict);
+            if (redactionMode == RedactionMode.Tokenize)
+            {
+                tokenizedCount = await RedactInPlaceAsync(root!, verdict, requestId, redactionTokens, ct);
+            }
+            else
+            {
+                RedactInPlace(root!, verdict, redactionMode == RedactionMode.Mask);
+            }
+
             bodyText = root!.ToJsonString();
             await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Redacted, auth.AppId, bodyText,
                 force: mustRecord, ct: ct);
@@ -283,10 +295,16 @@ public static class DataPlaneEndpoints
             return;
         }
 
+        // 流式下无法安全还原令牌（分块边界不可知），因此只在非流式响应上还原。
         if (wantsStream)
         {
             http.Response.ContentType = "text/event-stream";
             http.Response.Headers.CacheControl = "no-cache";
+            if (tokenizedCount > 0)
+            {
+                http.Response.Headers["x-securehub-tokenized"] = tokenizedCount.ToString();
+            }
+
             await using var stream = await upstreamResponse.Content.ReadAsStreamAsync(ct);
             await stream.CopyToAsync(http.Response.Body, ct);
             await http.Response.Body.FlushAsync(ct);
@@ -299,6 +317,30 @@ public static class DataPlaneEndpoints
         }
 
         var responseBody = await upstreamResponse.Content.ReadAsStringAsync(ct);
+
+        if (tokenizedCount > 0)
+        {
+            var restored = await redactionTokens.RestoreAsync(requestId, responseBody, ct);
+            if (!ReferenceEquals(restored, responseBody) && !string.Equals(restored, responseBody, StringComparison.Ordinal))
+            {
+                responseBody = restored;
+                await audit.AppendAsync(
+                    AuditEventTypes.ContentRestored, auth.OwnerType == KeyOwnerType.App ? "app" : "user",
+                    auth.OwnerId.ToString(), auth.Label, "ok",
+                    billingOwner: auth.Billing,
+                    configure: e =>
+                    {
+                        e.RequestId = requestId;
+                        e.AppId = auth.AppId;
+                        e.TeamId = auth.TeamId;
+                        e.ModelAlias = rawModel;
+                        e.ProviderId = provider.Id;
+                        e.UpstreamModel = candidate.UpstreamModel;
+                        e.Detail = JsonSerializer.Serialize(new { tokens = tokenizedCount, mode = "tokenize" });
+                    }, ct: ct);
+            }
+        }
+
         http.Response.ContentType = "application/json";
         await http.Response.WriteAsync(responseBody, ct);
 
@@ -453,7 +495,7 @@ public static class DataPlaneEndpoints
         return result;
     }
 
-    private static void RedactInPlace(JsonNode root, GuardrailVerdict verdict)
+    private static void RedactInPlace(JsonNode root, GuardrailVerdict verdict, bool mask)
     {
         if (root["messages"] is not JsonArray messages) return;
 
@@ -463,9 +505,42 @@ public static class DataPlaneEndpoints
             if (content is not JsonValue value || !value.TryGetValue<string>(out var text)) continue;
 
             var relevant = verdict.Detections.Where(d => d.FieldPath == $"messages[{i}].content");
-            var (redacted, _) = Redactor.Replace(text, relevant, mask: true);
+            var (redacted, _) = Redactor.Replace(text, relevant, mask);
             messages[i]!["content"] = redacted;
         }
+    }
+
+    /// <summary>tokenize：把敏感值换成可逆令牌，密文随请求落库。</summary>
+    private static async Task<int> RedactInPlaceAsync(
+        JsonNode root,
+        GuardrailVerdict verdict,
+        string requestId,
+        RedactionTokenStore tokens,
+        CancellationToken ct)
+    {
+        if (root["messages"] is not JsonArray messages) return 0;
+
+        var total = 0;
+
+        for (var i = 0; i < messages.Count; i++)
+        {
+            var content = messages[i]?["content"];
+            if (content is not JsonValue value || !value.TryGetValue<string>(out var text)) continue;
+
+            var relevant = verdict.Detections
+                .Where(d => d.FieldPath == $"messages[{i}].content")
+                .ToArray();
+            if (relevant.Length == 0) continue;
+
+            var (redacted, replaced) = await tokens.TokenizeAsync(requestId, text, relevant, ct);
+            if (replaced > 0)
+            {
+                messages[i]!["content"] = redacted;
+                total += replaced;
+            }
+        }
+
+        return total;
     }
 
     private static (int Compressed, bool RolledBack) CompressInPlace(JsonNode root, CompressionSettings settings)

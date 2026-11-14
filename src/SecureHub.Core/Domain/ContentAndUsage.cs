@@ -34,6 +34,26 @@ public sealed class ContentDek
     public DateTimeOffset? RetiredAt { get; set; }
 }
 
+/// <summary>
+/// tokenize 脱敏令牌：把一个敏感值换成 <c>⟦sh:{TokenId}⟧</c> 外发，
+/// 密文留在这里，响应回来时按 TokenId 还原（PRD §7.4）。
+/// 令牌与请求绑定：AAD 含 requestId，跨请求复用会被 GCM 拒绝。
+/// </summary>
+public sealed class RedactionToken
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string TokenId { get; set; } = string.Empty;
+    public string RequestId { get; set; } = string.Empty;
+    public string DetectorId { get; set; } = string.Empty;
+    public byte[] CipherText { get; set; } = [];
+    public byte[] Nonce { get; set; } = [];
+    public byte[] Tag { get; set; } = [];
+    public string DekId { get; set; } = string.Empty;
+    public int PlainLength { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+}
+
 /// <summary>用量事件（按真实命中成员记账）。</summary>
 public sealed class UsageEvent
 {

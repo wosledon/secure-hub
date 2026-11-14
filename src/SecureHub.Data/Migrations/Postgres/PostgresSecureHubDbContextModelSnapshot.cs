@@ -49,6 +49,80 @@ namespace SecureHub.Data.Migrations.Postgres
                     b.ToTable("Apps");
                 });
 
+            modelBuilder.Entity("SecureHub.Core.Domain.AssistantMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EvidenceJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ToolCallCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ToolNames")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "CreatedAt");
+
+                    b.ToTable("AssistantMessages");
+                });
+
+            modelBuilder.Entity("SecureHub.Core.Domain.AssistantSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("MessageCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ModelAlias")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "UpdatedAt");
+
+                    b.ToTable("AssistantSessions");
+                });
+
             modelBuilder.Entity("SecureHub.Core.Domain.AuditAnchor", b =>
                 {
                     b.Property<Guid>("Id")
@@ -701,6 +775,65 @@ namespace SecureHub.Data.Migrations.Postgres
                     b.ToTable("ProviderOfferings");
                 });
 
+            modelBuilder.Entity("SecureHub.Core.Domain.RedactionToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("CipherText")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DekId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("DetectorId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("Nonce")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<int>("PlainLength")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RequestId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<byte[]>("Tag")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("TokenId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("RequestId");
+
+                    b.HasIndex("TokenId")
+                        .IsUnique();
+
+                    b.ToTable("RedactionTokens");
+                });
+
             modelBuilder.Entity("SecureHub.Core.Domain.SecurityPolicy", b =>
                 {
                     b.Property<Guid>("Id")
@@ -977,6 +1110,15 @@ namespace SecureHub.Data.Migrations.Postgres
                     b.HasIndex("OwnerType", "OwnerId");
 
                     b.ToTable("VirtualKeys");
+                });
+
+            modelBuilder.Entity("SecureHub.Core.Domain.AssistantMessage", b =>
+                {
+                    b.HasOne("SecureHub.Core.Domain.AssistantSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

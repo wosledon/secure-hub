@@ -51,6 +51,28 @@ public enum GuardrailSeverity
     Critical = 2
 }
 
+/// <summary>
+/// 脱敏方式（PRD §7.4）：
+/// <list type="bullet">
+/// <item><c>Mask</c>：部分遮蔽（138****1234），不可逆，人可读。</item>
+/// <item><c>Placeholder</c>：替换为 <c>&lt;PII.CN_MOBILE_1&gt;</c>，不可逆，人不可读。</item>
+/// <item><c>Tokenize</c>：替换为 <c>⟦sh:token⟧</c>，密文存库，响应回来时还原 —— 上游"看不见"但下游"用得着"。</item>
+/// </list>
+/// </summary>
+public enum RedactionMode
+{
+    Mask = 0,
+    Placeholder = 1,
+    Tokenize = 2
+}
+
+/// <summary>助手会话中的消息角色。</summary>
+public enum AssistantMessageRole
+{
+    User = 0,
+    Assistant = 1
+}
+
 public enum AuditSeverity
 {
     Info = 0,
@@ -127,6 +149,9 @@ public static class AuditEventTypes
     public const string CatalogSynced = "catalog_synced";
     public const string ByokEnabled = "byok_enabled";
     public const string AssistantToolInvoked = "assistant_tool_invoked";
+    public const string AssistantSessionStarted = "assistant_session_started";
+    public const string AssistantAnswerReturned = "assistant_answer_returned";
+    public const string ContentRestored = "content_restored";
     public const string SecurityBaselineFailed = "security_baseline_failed";
 }
 
@@ -155,4 +180,8 @@ public static class ReasonCodes
     public const string DetectorTimeout = "detector_timeout";
     public const string CompressionRolledBack = "compression_rolled_back";
     public const string AllCandidatesFailed = "all_candidates_failed";
+    public const string ContentNotFound = "content_not_found";
+    public const string ContentExpired = "content_expired";
+    public const string ContentReadDisabled = "content_read_disabled";
+    public const string SessionNotFound = "session_not_found";
 }

@@ -44,6 +44,80 @@ namespace SecureHub.Data.Migrations.Sqlite
                     b.ToTable("Apps");
                 });
 
+            modelBuilder.Entity("SecureHub.Core.Domain.AssistantMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EvidenceJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ToolCallCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ToolNames")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "CreatedAt");
+
+                    b.ToTable("AssistantMessages");
+                });
+
+            modelBuilder.Entity("SecureHub.Core.Domain.AssistantSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MessageCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ModelAlias")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "UpdatedAt");
+
+                    b.ToTable("AssistantSessions");
+                });
+
             modelBuilder.Entity("SecureHub.Core.Domain.AuditAnchor", b =>
                 {
                     b.Property<Guid>("Id")
@@ -696,6 +770,65 @@ namespace SecureHub.Data.Migrations.Sqlite
                     b.ToTable("ProviderOfferings");
                 });
 
+            modelBuilder.Entity("SecureHub.Core.Domain.RedactionToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("CipherText")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DekId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DetectorId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Nonce")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<int>("PlainLength")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequestId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Tag")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("TokenId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("RequestId");
+
+                    b.HasIndex("TokenId")
+                        .IsUnique();
+
+                    b.ToTable("RedactionTokens");
+                });
+
             modelBuilder.Entity("SecureHub.Core.Domain.SecurityPolicy", b =>
                 {
                     b.Property<Guid>("Id")
@@ -972,6 +1105,15 @@ namespace SecureHub.Data.Migrations.Sqlite
                     b.HasIndex("OwnerType", "OwnerId");
 
                     b.ToTable("VirtualKeys");
+                });
+
+            modelBuilder.Entity("SecureHub.Core.Domain.AssistantMessage", b =>
+                {
+                    b.HasOne("SecureHub.Core.Domain.AssistantSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

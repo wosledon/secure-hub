@@ -56,6 +56,10 @@ public sealed class GuardrailOptions
     /// <summary>block | allow</summary>
     public string OnError { get; set; } = "block";
     public int ObservationModeDays { get; set; } = 7;
+    /// <summary>mask | placeholder | tokenize（PRD §7.4）。</summary>
+    public string RedactionMode { get; set; } = "mask";
+    /// <summary>tokenize 令牌存活期；越短越安全，但跨天会话会无法还原。</summary>
+    public int TokenRetentionHours { get; set; } = 24;
 }
 
 public sealed class CompressionOptions
@@ -102,4 +106,12 @@ public sealed class AssistantOptions
     public string DefaultModel { get; set; } = string.Empty;
     public int MaxRounds { get; set; } = 6;
     public int MaxToolResultChars { get; set; } = 8_000;
+    /// <summary>上下文回放的消息条数上限（只算 user/assistant 文本轮）。</summary>
+    public int MaxHistoryMessages { get; set; } = 12;
+    /// <summary>是否允许 <c>read_content</c> 工具；默认关闭（PRD §7.5）。</summary>
+    public bool AllowContentRead { get; set; }
+    /// <summary>read_content 单次返回的字符上限。</summary>
+    public int MaxContentReadChars { get; set; } = 8_000;
+    /// <summary>流式响应的心跳间隔与整体超时（秒）。</summary>
+    public int StreamTimeoutSeconds { get; set; } = 180;
 }

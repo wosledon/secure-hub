@@ -39,6 +39,9 @@ public class SecureHubDbContext : DbContext
     public DbSet<SecurityPolicyVersion> SecurityPolicyVersions => Set<SecurityPolicyVersion>();
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<CatalogModel> CatalogModels => Set<CatalogModel>();
+    public DbSet<AssistantSession> AssistantSessions => Set<AssistantSession>();
+    public DbSet<AssistantMessage> AssistantMessages => Set<AssistantMessage>();
+    public DbSet<RedactionToken> RedactionTokens => Set<RedactionToken>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -237,6 +240,41 @@ public class SecureHubDbContext : DbContext
             e.Property(x => x.InputPricePerMillion).HasPrecision(18, 6);
             e.Property(x => x.OutputPricePerMillion).HasPrecision(18, 6);
             e.HasIndex(x => x.ProviderKey);
+        });
+
+        b.Entity<AssistantSession>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Title).HasMaxLength(200).IsRequired();
+            e.Property(x => x.ModelAlias).HasMaxLength(200);
+            // 会话只属于本人；用户端查询永远带 UserId 过滤。
+            e.HasIndex(x => new { x.UserId, x.UpdatedAt });
+        });
+
+        b.Entity<AssistantMessage>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Content).IsRequired();
+            e.Property(x => x.ToolNames).HasMaxLength(500);
+            e.Property(x => x.Model).HasMaxLength(200);
+            e.HasIndex(x => new { x.SessionId, x.CreatedAt });
+            e.HasOne<AssistantSession>()
+                .WithMany()
+                .HasForeignKey(x => x.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<RedactionToken>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TokenId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.RequestId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.DetectorId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.DekId).HasMaxLength(32).IsRequired();
+            e.Property(x => x.CipherText).IsRequired();
+            e.HasIndex(x => x.TokenId).IsUnique();
+            e.HasIndex(x => x.RequestId);
+            e.HasIndex(x => x.ExpiresAt);
         });
     }
 

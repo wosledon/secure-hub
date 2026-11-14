@@ -21,6 +21,14 @@ public sealed record CreateProviderRequest(
     string ApiKey,
     string[] Models);
 
+public sealed record UpsertBudgetRequest(
+    BudgetSubject Subject,
+    Guid? SubjectId,
+    string Period,
+    long? TokenLimit,
+    decimal? CostLimit,
+    bool Enabled);
+
 public static class ManagementEndpoints
 {
     public static void MapManagement(this IEndpointRouteBuilder app)
@@ -38,6 +46,8 @@ public static class ManagementEndpoints
         admin.MapGet("/audit", QueryAuditAsync);
         admin.MapGet("/audit/verify", VerifyAuditAsync);
         admin.MapGet("/usage/summary", UsageSummaryAsync);
+        admin.MapGet("/budgets", ListBudgetsAsync);
+        admin.MapPost("/budgets", UpsertBudgetAsync);
 
         var me = app.MapGroup("/api/me");
         me.MapGet("/providers", ListMyProvidersAsync);
@@ -385,8 +395,66 @@ public static class ManagementEndpoints
         await http.Response.WriteAsJsonAsync(new { from, data = grouped }, ct);
     }
 
-    // ---------- me ----------
+    private static async Task ListBudgetsAsync(
+        HttpContext http, SessionStore sessions, SecureHubDbContext db,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (RequireAdmin(http, sessions, options.Value, Permission.BudgetWrite) is null) return;
 
+        var rows = await db.Budgets.AsNoTracking().ToListAsync(ct);
+        await http.Response.WriteAsJsonAsync(rows.Select(b => new
+        {
+            b.Id,
+            subject = b.Subject.ToString().ToLowerInvariant(),
+            b.SubjectId,
+            b.Period,
+            b.TokenLimit,
+            b.CostLimit,
+            b.TokensUsed,
+            b.CostUsed,
+            b.PeriodStart,
+            b.Enabled
+        }), ct);
+    }
+
+    private static async Task UpsertBudgetAsync(
+        HttpContext http, UpsertBudgetRequest request, SessionStore sessions,
+        SecureHubDbContext db, IOptions<SecureHubOptions> options, IClock clock, CancellationToken ct)
+    {
+        if (RequireAdmin(http, sessions, options.Value, Permission.BudgetWrite) is null) return;
+        var localizer = ApiLocalization.For(http, options);
+
+        var period = (request.Period ?? "month").ToLowerInvariant();
+        if (period is not ("day" or "week" or "month"))
+        {
+            await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        var budget = await db.Budgets.FirstOrDefaultAsync(b =>
+            b.Subject == request.Subject && b.SubjectId == request.SubjectId && b.Period == period, ct);
+
+        if (budget is null)
+        {
+            budget = new Budget
+            {
+                Subject = request.Subject,
+                SubjectId = request.SubjectId,
+                Period = period,
+                PeriodStart = clock.UtcNow
+            };
+            db.Budgets.Add(budget);
+        }
+
+        budget.TokenLimit = request.TokenLimit;
+        budget.CostLimit = request.CostLimit;
+        budget.Enabled = request.Enabled;
+
+        await db.SaveChangesAsync(ct);
+        await http.Response.WriteAsJsonAsync(new { id = budget.Id }, ct);
+    }
+
+    // ---------- me ----------
     private static async Task ListMyProvidersAsync(
         HttpContext http, SessionStore sessions, SecureHubDbContext db,
         IOptions<SecureHubOptions> options, CancellationToken ct)

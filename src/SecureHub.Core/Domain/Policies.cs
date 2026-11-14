@@ -31,7 +31,7 @@ public sealed class SecurityPolicyVersion
 public sealed class Budget
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public SubjectType SubjectType { get; set; }
+    public BudgetSubject Subject { get; set; }
     public Guid? SubjectId { get; set; }
 
     /// <summary>day | week | month</summary>
@@ -43,6 +43,13 @@ public sealed class Budget
     public decimal CostUsed { get; set; }
     public DateTimeOffset PeriodStart { get; set; }
     public bool Enabled { get; set; } = true;
+}
+
+public enum BudgetSubject
+{
+    All = 0,
+    Team = 1,
+    App = 2
 }
 
 /// <summary>模型能力目录条目（models.dev 同步）。</summary>

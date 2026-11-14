@@ -57,6 +57,7 @@ builder.Services.AddSingleton<ContentCipher>();
 builder.Services.AddSingleton<AuditWriter>();
 builder.Services.AddSingleton<ProviderCredentialStore>();
 builder.Services.AddSingleton<PolicyStore>();
+builder.Services.AddScoped<BudgetGuard>();
 builder.Services.AddScoped<ContentStore>();
 builder.Services.AddScoped<RouteResolver>();
 builder.Services.AddScoped<GuardrailPipeline>(_ => new GuardrailPipeline(

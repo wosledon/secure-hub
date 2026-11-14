@@ -222,7 +222,7 @@ public sealed class SecureHubDbContext(DbContextOptions<SecureHubDbContext> opti
             e.Property(x => x.Period).HasMaxLength(16).IsRequired();
             e.Property(x => x.CostLimit).HasPrecision(18, 6);
             e.Property(x => x.CostUsed).HasPrecision(18, 6);
-            e.HasIndex(x => new { x.SubjectType, x.SubjectId });
+            e.HasIndex(x => new { x.Subject, x.SubjectId });
         });
 
         b.Entity<CatalogModel>(e =>

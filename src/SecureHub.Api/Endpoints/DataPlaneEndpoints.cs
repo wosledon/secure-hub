@@ -32,6 +32,7 @@ public static class DataPlaneEndpoints
         ContentStore content,
         AuditWriter audit,
         PolicyStore policies,
+        BudgetGuard budgets,
         ProviderCredentialStore credentials,
         SecureHubDbContext db,
         IHttpClientFactory httpClientFactory,
@@ -56,6 +57,32 @@ public static class DataPlaneEndpoints
         }
 
         // 2) 读取与校验
+        var budget = await budgets.CheckAsync(auth.AppId, auth.TeamId, ct);
+        if (!budget.Allowed)
+        {
+            await audit.AppendAsync(
+                AuditEventTypes.QuotaExceeded, auth.OwnerType == KeyOwnerType.App ? "app" : "user",
+                auth.OwnerId.ToString(), auth.Label, ReasonCodes.QuotaExceeded,
+                action: GuardrailAction.Block, severity: AuditSeverity.Warning,
+                billingOwner: auth.Billing,
+                configure: e =>
+                {
+                    e.RequestId = requestId;
+                    e.AppId = auth.AppId;
+                    e.TeamId = auth.TeamId;
+                    e.Detail = JsonSerializer.Serialize(new
+                    {
+                        tokens_used = budget.TokensUsed,
+                        token_limit = budget.TokenLimit,
+                        cost_used = budget.CostUsed,
+                        cost_limit = budget.CostLimit
+                    });
+                }, ct: ct);
+
+            await ApiError.Create(429, ReasonCodes.QuotaExceeded, localizer, requestId).ExecuteAsync(http);
+            return;
+        }
+
         string bodyText;
         using (var reader = new StreamReader(http.Request.Body, Encoding.UTF8))
         {
@@ -258,7 +285,7 @@ public static class DataPlaneEndpoints
             await http.Response.Body.FlushAsync(ct);
 
             await RecordUsageAsync(
-                audit, content, auth, decision, provider.Id, candidate.UpstreamModel,
+                db, audit, budgets, auth, decision, provider.Id, candidate.UpstreamModel,
                 requestId, rawModel, originalTokens, EstimateTokens(outboundBody),
                 0, estimated: true, rolledBack, ct);
             return;
@@ -270,14 +297,15 @@ public static class DataPlaneEndpoints
 
         var (inputTokens, outputTokens) = ReadUsage(responseBody);
         await RecordUsageAsync(
-            audit, content, auth, decision, provider.Id, candidate.UpstreamModel,
+            db, audit, budgets, auth, decision, provider.Id, candidate.UpstreamModel,
             requestId, rawModel, originalTokens, inputTokens,
             outputTokens, estimated: inputTokens == 0, rolledBack, ct);
     }
 
     private static async Task RecordUsageAsync(
+        SecureHubDbContext db,
         AuditWriter audit,
-        ContentStore content,
+        BudgetGuard budgetGuard,
         AuthContext auth,
         RouteDecision decision,
         Guid providerId,
@@ -291,6 +319,37 @@ public static class DataPlaneEndpoints
         bool compressionRolledBack,
         CancellationToken ct)
     {
+        var offering = await db.ProviderOfferings.AsNoTracking().FirstOrDefaultAsync(
+            o => o.ProviderId == providerId && o.UpstreamModel == upstreamModel, ct);
+
+        var cost = offering is null
+            ? 0m
+            : (inputTokens / 1_000_000m) * offering.InputPricePerMillion
+              + (outputTokens / 1_000_000m) * offering.OutputPricePerMillion;
+
+        db.UsageEvents.Add(new UsageEvent
+        {
+            OccurredAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
+            AppId = auth.AppId,
+            TeamId = auth.TeamId,
+            UserId = auth.OwnerType == KeyOwnerType.User ? auth.OwnerId : null,
+            VirtualKeyId = auth.VirtualKeyId,
+            ProviderId = providerId,
+            ModelScope = decision.Model.Scope,
+            BillingOwner = decision.BillingOwner,
+            Model = requestedModel,
+            UpstreamModel = upstreamModel,
+            InputTokens = inputTokens,
+            InputTokensOriginal = originalTokens,
+            OutputTokens = outputTokens,
+            CostUsd = cost,
+            Estimated = estimated,
+            RequestId = requestId
+        });
+
+        await db.SaveChangesAsync(ct);
+        await budgetGuard.AccumulateAsync(auth.AppId, auth.TeamId, inputTokens + outputTokens, cost, ct);
+
         await audit.AppendAsync(
             AuditEventTypes.RouteSelected,
             auth.OwnerType == KeyOwnerType.App ? "app" : "user",
@@ -309,6 +368,7 @@ public static class DataPlaneEndpoints
                 e.InputTokens = inputTokens;
                 e.InputTokensOriginal = originalTokens;
                 e.OutputTokens = outputTokens;
+                e.CostUsd = cost;
                 e.Detail = JsonSerializer.Serialize(new { estimated, rolledBack = compressionRolledBack });
             }, ct: ct);
     }

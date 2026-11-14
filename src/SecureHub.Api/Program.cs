@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SecureHub.Api.Services;
 using SecureHub.Core;
 using SecureHub.Core.Abstractions;
 using SecureHub.Core.Options;
@@ -28,6 +29,11 @@ builder.Services.AddSecureHubDbContext(o =>
 });
 
 builder.Services.AddHealthChecks();
+
+builder.Services.AddSingleton<ContentCipher>();
+builder.Services.AddSingleton<AuditWriter>();
+builder.Services.AddScoped<ContentStore>();
+builder.Services.AddScoped<RouteResolver>();
 
 var app = builder.Build();
 

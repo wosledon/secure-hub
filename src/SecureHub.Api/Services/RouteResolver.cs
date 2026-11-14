@@ -46,61 +46,95 @@ public sealed class RouteResolver(
 
         var offerings = await db.ProviderOfferings.AsNoTracking().ToListAsync(ct);
         var entitlements = await db.Entitlements.AsNoTracking().ToListAsync(ct);
+        var groups = await db.ModelGroups.AsNoTracking().Where(g => g.Enabled).ToListAsync(ct);
+        var members = await db.ModelGroupMembers.AsNoTracking().ToListAsync(ct);
         var now = DateTimeOffset.UtcNow;
 
-        var matches = new List<(Provider Provider, ProviderOffering Offering)>();
+        var candidates = new List<RouteCandidate>();
 
-        foreach (var offering in offerings.Where(o => o.Enabled))
+        // 1) 显式建模组优先（PRD §6.6.2）
+        if (modelId.ProviderAlias is null)
         {
-            var provider = providers.FirstOrDefault(p => p.Id == offering.ProviderId);
-            if (provider is null) continue;
+            var explicitGroup = groups.FirstOrDefault(g =>
+                !g.IsAuto && string.Equals(g.Name, modelId.Model, StringComparison.Ordinal));
 
-            if (!ModelMatches(offering, modelId.Model)) continue;
-
-            if (modelId.Scope == ModelScope.User)
+            if (explicitGroup is not null)
             {
-                // 个人命名空间：必须是自己 BYOK 的供应商
-                if (provider.Scope != ProviderScope.User) continue;
-                if (provider.OwnerUserId != ownerId) continue;
-                if (ownerType != KeyOwnerType.User) continue;
-            }
-            else
-            {
-                if (provider.Scope != ProviderScope.Org) continue;
-                if (modelId.ProviderAlias is not null &&
-                    !string.Equals(provider.Alias, modelId.ProviderAlias, StringComparison.Ordinal))
+                foreach (var member in members.Where(m => m.GroupId == explicitGroup.Id && m.Enabled))
                 {
-                    continue;
+                    var provider = providers.FirstOrDefault(p => p.Id == member.ProviderId);
+                    if (provider is null) continue;
+
+                    if (!ScopeVisible(member.Scope, provider, explicitGroup.AllowCrossScope, ownerType, ownerId)) continue;
+                    if (member.Scope == ModelScope.Org &&
+                        !IsEntitled(entitlements, provider.Id, teamId, ownerId, now)) continue;
+
+                    candidates.Add(new RouteCandidate(
+                        member.Id,
+                        member.Scope,
+                        provider.Id,
+                        provider.Alias,
+                        member.UpstreamModel,
+                        member.Priority,
+                        member.Weight,
+                        member.State));
                 }
-
-                if (!IsEntitled(entitlements, provider.Id, teamId, ownerId, now)) continue;
             }
-
-            matches.Add((provider, offering));
         }
 
-        if (matches.Count == 0)
+        // 2) 回退到 offering 匹配（同名自动成组由负载均衡器处理）
+        if (candidates.Count == 0)
+        {
+            foreach (var offering in offerings.Where(o => o.Enabled))
+            {
+                var provider = providers.FirstOrDefault(p => p.Id == offering.ProviderId);
+                if (provider is null) continue;
+
+                if (!ModelMatches(offering, modelId.Model)) continue;
+
+                if (modelId.Scope == ModelScope.User)
+                {
+                    // 个人命名空间：必须是自己 BYOK 的供应商
+                    if (provider.Scope != ProviderScope.User) continue;
+                    if (provider.OwnerUserId != ownerId) continue;
+                    if (ownerType != KeyOwnerType.User) continue;
+                }
+                else
+                {
+                    if (provider.Scope != ProviderScope.Org) continue;
+                    if (modelId.ProviderAlias is not null &&
+                        !string.Equals(provider.Alias, modelId.ProviderAlias, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (!IsEntitled(entitlements, provider.Id, teamId, ownerId, now)) continue;
+                }
+
+                candidates.Add(new RouteCandidate(
+                    offering.Id,
+                    modelId.Scope,
+                    provider.Id,
+                    provider.Alias,
+                    offering.UpstreamModel,
+                    Priority: 100,
+                    Weight: 100,
+                    MemberState.Healthy));
+            }
+        }
+
+        if (candidates.Count == 0)
         {
             return RouteDecision.Fail(modelId, ReasonCodes.ModelNotFound);
         }
 
-        var candidates = matches
-            .Select(m => new RouteCandidate(
-                m.Offering.Id,
-                modelId.Scope,
-                m.Provider.Id,
-                m.Provider.Alias,
-                m.Offering.UpstreamModel,
-                Priority: 100,
-                Weight: 100,
-                MemberState.Healthy))
+        var displayList = candidates
+            .Select(c => $"{ModelId.ScopePrefix(c.Scope)}/{c.ProviderAlias}/{c.UpstreamModel}")
             .ToList();
-
-        var displayList = candidates.Select(c => $"{ModelId.ScopePrefix(modelId.Scope)}/{c.ProviderAlias}/{c.UpstreamModel}").ToList();
 
         if (candidates.Count == 1)
         {
-            return new RouteDecision(true, null, modelId, candidates[0], displayList, ToBilling(modelId.Scope));
+            return new RouteDecision(true, null, modelId, candidates[0], displayList, ToBilling(candidates[0].Scope));
         }
 
         if (!options.Value.LoadBalancing.Enabled)
@@ -111,7 +145,28 @@ public sealed class RouteResolver(
         var selected = LoadBalancer.Select(candidates, options.Value.LoadBalancing.HealthPenalty);
         return selected is null
             ? RouteDecision.Fail(modelId, ReasonCodes.AllCandidatesFailed, displayList)
-            : new RouteDecision(true, null, modelId, selected, displayList, ToBilling(modelId.Scope));
+            : new RouteDecision(true, null, modelId, selected, displayList, ToBilling(selected.Scope));
+    }
+
+    /// <summary>
+    /// 组内可见性：企业成员对所有人可见；个人成员仅在本人请求且组允许跨 scope 时参与。
+    /// 显式 <c>me/...</c> 路径不走这里，始终可用自己的凭据。
+    /// </summary>
+    private static bool ScopeVisible(
+        ModelScope memberScope,
+        Provider provider,
+        bool allowCrossScope,
+        KeyOwnerType ownerType,
+        Guid ownerId)
+    {
+        if (memberScope == ModelScope.Org)
+        {
+            return provider.Scope == ProviderScope.Org;
+        }
+
+        if (ownerType != KeyOwnerType.User) return false;
+        if (!allowCrossScope) return false;
+        return provider.Scope == ProviderScope.User && provider.OwnerUserId == ownerId;
     }
 
     private static BillingOwner ToBilling(ModelScope scope) =>

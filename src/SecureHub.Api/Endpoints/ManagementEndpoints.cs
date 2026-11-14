@@ -29,6 +29,19 @@ public sealed record UpsertBudgetRequest(
     decimal? CostLimit,
     bool Enabled);
 
+public sealed record ModelGroupMemberDto(
+    Guid ProviderId,
+    string UpstreamModel,
+    int Priority,
+    int Weight,
+    bool Enabled);
+
+public sealed record UpsertModelGroupRequest(
+    string Name,
+    bool AllowCrossScope,
+    string Strategy,
+    ModelGroupMemberDto[] Members);
+
 public static class ManagementEndpoints
 {
     public static void MapManagement(this IEndpointRouteBuilder app)
@@ -48,6 +61,8 @@ public static class ManagementEndpoints
         admin.MapGet("/usage/summary", UsageSummaryAsync);
         admin.MapGet("/budgets", ListBudgetsAsync);
         admin.MapPost("/budgets", UpsertBudgetAsync);
+        admin.MapGet("/model-groups", ListModelGroupsAsync);
+        admin.MapPost("/model-groups", UpsertModelGroupAsync);
 
         var me = app.MapGroup("/api/me");
         me.MapGet("/providers", ListMyProvidersAsync);
@@ -452,6 +467,89 @@ public static class ManagementEndpoints
 
         await db.SaveChangesAsync(ct);
         await http.Response.WriteAsJsonAsync(new { id = budget.Id }, ct);
+    }
+
+    private static async Task ListModelGroupsAsync(
+        HttpContext http, SessionStore sessions, SecureHubDbContext db,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (RequireAdmin(http, sessions, options.Value, Permission.RoutingRead) is null) return;
+
+        var groups = await db.ModelGroups.AsNoTracking().ToListAsync(ct);
+        var members = await db.ModelGroupMembers.AsNoTracking().ToListAsync(ct);
+        var providers = await db.Providers.AsNoTracking().ToListAsync(ct);
+
+        await http.Response.WriteAsJsonAsync(groups.Select(g => new
+        {
+            g.Id,
+            g.Name,
+            g.IsAuto,
+            g.AllowCrossScope,
+            g.Strategy,
+            members = members.Where(m => m.GroupId == g.Id).Select(m => new
+            {
+                provider = providers.FirstOrDefault(p => p.Id == m.ProviderId)?.Alias,
+                m.UpstreamModel,
+                m.Priority,
+                m.Weight,
+                state = m.State.ToString().ToLowerInvariant(),
+                m.Enabled
+            })
+        }), ct);
+    }
+
+    private static async Task UpsertModelGroupAsync(
+        HttpContext http, UpsertModelGroupRequest request, SessionStore sessions,
+        SecureHubDbContext db, IOptions<SecureHubOptions> options, IClock clock, CancellationToken ct)
+    {
+        if (RequireAdmin(http, sessions, options.Value, Permission.RoutingWrite) is null) return;
+        var localizer = ApiLocalization.For(http, options);
+
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Members.Length == 0)
+        {
+            await ApiError.Create(400, "validation.required", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        var group = await db.ModelGroups.FirstOrDefaultAsync(g => g.Name == request.Name, ct);
+        if (group is null)
+        {
+            group = new ModelGroup
+            {
+                Name = request.Name,
+                IsAuto = false,
+                CreatedAt = clock.UtcNow
+            };
+            db.ModelGroups.Add(group);
+        }
+
+        group.AllowCrossScope = request.AllowCrossScope;
+        group.Strategy = string.IsNullOrWhiteSpace(request.Strategy) ? "priority-weighted" : request.Strategy;
+        group.Enabled = true;
+
+        var existing = await db.ModelGroupMembers.Where(m => m.GroupId == group.Id).ToListAsync(ct);
+        db.ModelGroupMembers.RemoveRange(existing);
+
+        foreach (var member in request.Members)
+        {
+            var provider = await db.Providers.FindAsync(new object[] { member.ProviderId }, ct);
+            if (provider is null) continue;
+
+            db.ModelGroupMembers.Add(new ModelGroupMember
+            {
+                GroupId = group.Id,
+                Scope = provider.Scope == ProviderScope.User ? ModelScope.User : ModelScope.Org,
+                ProviderId = provider.Id,
+                UpstreamModel = member.UpstreamModel,
+                Priority = member.Priority,
+                Weight = member.Weight <= 0 ? 100 : member.Weight,
+                Enabled = member.Enabled,
+                State = MemberState.Healthy
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+        await http.Response.WriteAsJsonAsync(new { id = group.Id, group.Name }, ct);
     }
 
     // ---------- me ----------

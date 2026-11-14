@@ -480,3 +480,12 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# SecureHub runtime & frontend artifacts
+data/
+api.log
+api.err.log
+frontend/node_modules/
+frontend/dist/
+src/SecureHub.Api/wwwroot/
+*.tsbuildinfo

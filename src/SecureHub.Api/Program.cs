@@ -9,7 +9,12 @@ using SecureHub.Core.Options;
 using SecureHub.Core.Security.Guardrails;
 using SecureHub.Data;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    // 静态资源随程序输出，避免运行时依赖仓库目录结构
+    WebRootPath = Path.Combine(AppContext.BaseDirectory, "wwwroot")
+});
 
 var hubOptions = builder.Configuration
     .GetSection(SecureHubOptions.SectionName)
@@ -84,6 +89,29 @@ app.MapHealthChecks("/healthz");
 
 app.MapDataPlane();
 app.MapManagement();
+
+// SPA 回退：/admin、/me 等前端路由返回 index.html；
+// /api 与 /v1 下的未知路径保持 404，避免把 JSON 调用者导到 HTML。
+app.MapFallback(async context =>
+{
+    var path = context.Request.Path.Value ?? string.Empty;
+    if (path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/v1", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    var indexPath = Path.Combine(app.Environment.WebRootPath ?? "wwwroot", "index.html");
+    if (!File.Exists(indexPath))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(indexPath);
+});
 
 app.Run();
 

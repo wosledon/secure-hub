@@ -56,6 +56,7 @@ builder.Services.AddScoped<ApiKeyAuthenticator>();
 builder.Services.AddSingleton<ContentCipher>();
 builder.Services.AddSingleton<AuditWriter>();
 builder.Services.AddSingleton<ProviderCredentialStore>();
+builder.Services.AddSingleton<PolicyStore>();
 builder.Services.AddScoped<ContentStore>();
 builder.Services.AddScoped<RouteResolver>();
 builder.Services.AddScoped<GuardrailPipeline>(_ => new GuardrailPipeline(
@@ -76,6 +77,9 @@ if (hubOptions.Database.AutoMigrate)
     await bootstrapper.InitializeAsync();
 }
 
+// 策略快照必须在开始服务前加载；失败只记录错误，不阻断启动（快照为空 = 无策略）。
+await app.Services.GetRequiredService<PolicyStore>().RefreshAsync();
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
@@ -89,6 +93,7 @@ app.MapHealthChecks("/healthz");
 
 app.MapDataPlane();
 app.MapManagement();
+app.MapPolicies();
 
 // SPA 回退：/admin、/me 等前端路由返回 index.html；
 // /api 与 /v1 下的未知路径保持 404，避免把 JSON 调用者导到 HTML。

@@ -11,6 +11,7 @@ using SecureHub.Core.Localization;
 using SecureHub.Core.Models;
 using SecureHub.Core.Options;
 using SecureHub.Core.Security.Guardrails;
+using SecureHub.Core.Security.Policies;
 using SecureHub.Data;
 
 namespace SecureHub.Api.Endpoints;
@@ -30,6 +31,7 @@ public static class DataPlaneEndpoints
         RouteResolver router,
         ContentStore content,
         AuditWriter audit,
+        PolicyStore policies,
         ProviderCredentialStore credentials,
         SecureHubDbContext db,
         IHttpClientFactory httpClientFactory,
@@ -89,11 +91,27 @@ public static class DataPlaneEndpoints
         // 3) 原文落盘（护栏之前，拦截也要可取证）
         await content.SaveAsync(requestId, ContentDirection.Request, ContentVariant.Raw, auth.AppId, bodyText, ct);
 
-        // 4) 入向护栏
+        // 4) 入向护栏 + 策略评估（动作取两者较严者）
         var texts = CollectTexts(root!);
         var verdict = await guardrails.RunAsync(texts, GuardrailDirection.Inbound, ct);
 
-        if (verdict.Action == GuardrailAction.Block)
+        var detectorIds = verdict.Detections
+            .Select(d => d.DetectorId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var policyDecision = PolicyEvaluator.Evaluate(policies.Snapshot, new PolicyEvalContext(
+            auth.AppId,
+            auth.TeamId,
+            rawModel,
+            detectorIds,
+            PolicyStore.Bucket(auth.AppId, auth.VirtualKeyId),
+            TimeOnly.FromDateTime(DateTime.UtcNow)));
+
+        var effectiveAction = (GuardrailAction)Math.Max((int)verdict.Action, (int)policyDecision.Action);
+        var firstPolicy = policyDecision.Hits.FirstOrDefault();
+
+        if (effectiveAction == GuardrailAction.Block)
         {
             var first = verdict.Detections.FirstOrDefault();
             await audit.AppendAsync(
@@ -106,9 +124,15 @@ public static class DataPlaneEndpoints
                     e.RequestId = requestId;
                     e.AppId = auth.AppId;
                     e.TeamId = auth.TeamId;
-                    e.RuleId = first?.RuleId;
+                    e.RuleId = first?.RuleId ?? firstPolicy?.RuleId;
+                    e.PolicyId = firstPolicy?.PolicyKey;
+                    e.PolicyVersion = firstPolicy?.Version;
                     e.ModelAlias = rawModel;
-                    e.Detail = JsonSerializer.Serialize(new { hits = verdict.Detections.Select(d => d.RuleId) });
+                    e.Detail = JsonSerializer.Serialize(new
+                    {
+                        hits = verdict.Detections.Select(d => d.RuleId),
+                        policies = policyDecision.Hits.Select(h => h.PolicyKey)
+                    });
                 }, ct: ct);
 
             await ApiError.Create(400, ReasonCodes.RequestBlocked, localizer, requestId,
@@ -117,7 +141,7 @@ public static class DataPlaneEndpoints
         }
 
         // 5) 脱敏
-        if (verdict.Action == GuardrailAction.Redact)
+        if (effectiveAction == GuardrailAction.Redact)
         {
             RedactInPlace(root!, verdict);
             bodyText = root!.ToJsonString();

@@ -32,6 +32,10 @@ public sealed class SecureHubDbContext(DbContextOptions<SecureHubDbContext> opti
     public DbSet<ContentBlob> ContentBlobs => Set<ContentBlob>();
     public DbSet<ContentDek> ContentDeks => Set<ContentDek>();
     public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
+    public DbSet<SecurityPolicy> SecurityPolicies => Set<SecurityPolicy>();
+    public DbSet<SecurityPolicyVersion> SecurityPolicyVersions => Set<SecurityPolicyVersion>();
+    public DbSet<Budget> Budgets => Set<Budget>();
+    public DbSet<CatalogModel> CatalogModels => Set<CatalogModel>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -196,6 +200,40 @@ public sealed class SecureHubDbContext(DbContextOptions<SecureHubDbContext> opti
             e.HasIndex(x => new { x.AppId, x.OccurredAt });
             e.HasIndex(x => x.BillingOwner);
             e.HasIndex(x => x.ProviderId);
+        });
+
+        b.Entity<SecurityPolicy>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.PolicyKey).HasMaxLength(100).IsRequired();
+            e.HasIndex(x => x.PolicyKey).IsUnique();
+        });
+
+        b.Entity<SecurityPolicyVersion>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.OnError).HasMaxLength(16).IsRequired();
+            e.HasIndex(x => new { x.PolicyId, x.Version }).IsUnique();
+        });
+
+        b.Entity<Budget>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Period).HasMaxLength(16).IsRequired();
+            e.Property(x => x.CostLimit).HasPrecision(18, 6);
+            e.Property(x => x.CostUsed).HasPrecision(18, 6);
+            e.HasIndex(x => new { x.SubjectType, x.SubjectId });
+        });
+
+        b.Entity<CatalogModel>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasMaxLength(200);
+            e.Property(x => x.ProviderKey).HasMaxLength(100).IsRequired();
+            e.Property(x => x.ModelId).HasMaxLength(200).IsRequired();
+            e.Property(x => x.InputPricePerMillion).HasPrecision(18, 6);
+            e.Property(x => x.OutputPricePerMillion).HasPrecision(18, 6);
+            e.HasIndex(x => x.ProviderKey);
         });
     }
 

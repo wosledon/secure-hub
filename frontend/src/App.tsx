@@ -176,7 +176,7 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
         <BrandLockup inverse subtitle={t('app.console')} />
       </Box>
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.07)', mx: 2 }} />
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 2 }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 1.5, py: 2 }}>
         {!isEndUserOnly && (
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, p: 0.5, mb: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)' }}>
             {(['org', 'personal'] as const).map((value) => (

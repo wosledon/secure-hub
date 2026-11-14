@@ -60,7 +60,10 @@ builder.Services.AddScoped<BudgetGuard>();
 builder.Services.AddSingleton<CatalogSyncService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CatalogSyncService>());
 builder.Services.AddScoped<ContentStore>();
+builder.Services.AddScoped<RedactionTokenStore>();
 builder.Services.AddScoped<RouteResolver>();
+builder.Services.AddScoped<AssistantToolbox>();
+builder.Services.AddScoped<AssistantSessionStore>();
 builder.Services.AddScoped<AuditAssistant>();
 builder.Services.AddScoped<GuardrailPipeline>(_ => new GuardrailPipeline(
     [new PiiDetector(), new SecretDetector()],

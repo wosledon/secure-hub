@@ -52,7 +52,9 @@ public sealed record CompiledPolicy(
 
 public sealed record PolicyEvalContext(
     Guid? AppId,
+    string? AppName,
     Guid? TeamId,
+    string? TeamName,
     string? Model,
     IReadOnlyCollection<string> Detectors,
     int Bucket,
@@ -105,8 +107,9 @@ public static class PolicyEvaluator
 
     private static bool ScopeMatches(PolicyScope scope, PolicyEvalContext context)
     {
-        if (!MatchesAny(scope.Teams, context.TeamId?.ToString())) return false;
-        if (!MatchesAny(scope.Apps, context.AppId?.ToString())) return false;
+        // scope 中写的是人可读的名称（app-*、team-research）；缺名称时回退到 Id。
+        if (!MatchesAny(scope.Teams, context.TeamName ?? context.TeamId?.ToString())) return false;
+        if (!MatchesAny(scope.Apps, context.AppName ?? context.AppId?.ToString())) return false;
         if (!MatchesAny(scope.Models, context.Model)) return false;
         return true;
     }

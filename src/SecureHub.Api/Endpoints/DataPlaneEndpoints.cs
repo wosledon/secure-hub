@@ -129,7 +129,9 @@ public static class DataPlaneEndpoints
 
         var policyDecision = PolicyEvaluator.Evaluate(policies.Snapshot, new PolicyEvalContext(
             auth.AppId,
+            auth.OwnerType == KeyOwnerType.App ? auth.Label : null,
             auth.TeamId,
+            null,
             rawModel,
             detectorIds,
             PolicyStore.Bucket(auth.AppId, auth.VirtualKeyId),

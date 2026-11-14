@@ -12,7 +12,7 @@ using SecureHub.Data;
 
 namespace SecureHub.Api.Endpoints;
 
-public sealed record LoginRequest(string UserName, string Password);
+public sealed record LoginRequest(string UserName, string Password, string? TotpCode = null);
 public sealed record CreateKeyRequest(string DisplayName, KeyOwnerType OwnerType, Guid OwnerId, string[]? Scopes);
 public sealed record CreateProviderRequest(
     string Alias,
@@ -42,6 +42,9 @@ public sealed record UpsertModelGroupRequest(
     string Strategy,
     ModelGroupMemberDto[] Members);
 
+public sealed record CreateDisputeRequest(string DisputeType, string? Note);
+public sealed record ActivateTotpRequest(string Code);
+
 public static class ManagementEndpoints
 {
     public static void MapManagement(this IEndpointRouteBuilder app)
@@ -49,6 +52,8 @@ public static class ManagementEndpoints
         app.MapPost("/api/auth/login", LoginAsync);
         app.MapPost("/api/auth/logout", Logout);
         app.MapGet("/api/auth/me", Me);
+        app.MapPost("/api/auth/totp/enable", EnableTotpAsync);
+        app.MapPost("/api/auth/totp/activate", ActivateTotpAsync);
 
         var admin = app.MapGroup("/api/admin");
         admin.MapGet("/providers", ListProvidersAsync);
@@ -58,6 +63,9 @@ public static class ManagementEndpoints
         admin.MapPost("/keys/{id:guid}/revoke", RevokeKeyAsync);
         admin.MapGet("/audit", QueryAuditAsync);
         admin.MapGet("/audit/verify", VerifyAuditAsync);
+        admin.MapGet("/audit/export", ExportAuditAsync);
+        admin.MapPost("/audit/{eventId:guid}/dispute", CreateDisputeAsync);
+        admin.MapGet("/audit/disputes", ListDisputesAsync);
         admin.MapGet("/usage/summary", UsageSummaryAsync);
         admin.MapGet("/budgets", ListBudgetsAsync);
         admin.MapPost("/budgets", UpsertBudgetAsync);
@@ -81,6 +89,7 @@ public static class ManagementEndpoints
         LoginRequest request,
         SecureHubDbContext db,
         SessionStore sessions,
+        ProviderCredentialStore credentials,
         IOptions<SecureHubOptions> options,
         CancellationToken ct)
     {
@@ -91,6 +100,17 @@ public static class ManagementEndpoints
         {
             await ApiError.Create(401, "auth.login_failed", localizer).ExecuteAsync(http);
             return;
+        }
+
+        // 已启用的 TOTP 必须校验；pending 状态不参与登录校验。
+        if (user.TotpSecret is { } stored && stored.StartsWith("active:", StringComparison.Ordinal))
+        {
+            var secret = credentials.Unprotect(Convert.FromBase64String(stored["active:".Length..]));
+            if (!Totp.Verify(secret, request.TotpCode))
+            {
+                await ApiError.Create(401, "auth.login_failed", localizer).ExecuteAsync(http);
+                return;
+            }
         }
 
         var roles = user.Roles;
@@ -600,6 +620,171 @@ public static class ManagementEndpoints
             error = result.Error,
             synced_at = result.SyncedAt
         }, ct);
+    }
+
+    // ---------- totp ----------
+
+    private static async Task EnableTotpAsync(
+        HttpContext http, SessionStore sessions, SecureHubDbContext db,
+        ProviderCredentialStore credentials, IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        var session = RequireSession(http, sessions, options.Value);
+        if (session is null) return;
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == session.UserId, ct);
+        if (user is null)
+        {
+            await ApiError.NotFound(ApiLocalization.For(http, options)).ExecuteAsync(http);
+            return;
+        }
+
+        var secret = Totp.GenerateSecret();
+        var protectedSecret = Convert.ToBase64String(credentials.Protect(secret));
+        user.TotpSecret = $"pending:{protectedSecret}";
+        await db.SaveChangesAsync(ct);
+
+        await http.Response.WriteAsJsonAsync(new
+        {
+            secret,
+            otpauth_uri = Totp.BuildOtpAuthUri("SecureHub", user.UserName, secret),
+            note = "调用 /api/auth/totp/activate 提交 6 位验证码后生效"
+        }, ct);
+    }
+
+    private static async Task ActivateTotpAsync(
+        HttpContext http, ActivateTotpRequest request, SessionStore sessions,
+        SecureHubDbContext db, ProviderCredentialStore credentials,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        var session = RequireSession(http, sessions, options.Value);
+        if (session is null) return;
+
+        var localizer = ApiLocalization.For(http, options);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == session.UserId, ct);
+        if (user?.TotpSecret is not { } stored || !stored.StartsWith("pending:", StringComparison.Ordinal))
+        {
+            await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        var secret = credentials.Unprotect(Convert.FromBase64String(stored["pending:".Length..]));
+        if (!Totp.Verify(secret, request.Code))
+        {
+            await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        user.TotpSecret = $"active:{stored["pending:".Length..]}";
+        await db.SaveChangesAsync(ct);
+
+        await http.Response.WriteAsJsonAsync(new { activated = true }, ct);
+    }
+
+    // ---------- audit extras ----------
+
+    private static async Task ExportAuditAsync(
+        HttpContext http, SessionStore sessions, SecureHubDbContext db,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (RequireAdmin(http, sessions, options.Value, Permission.AuditExport) is null) return;
+
+        var from = ParseDate(http.Request.Query["from"]) ?? DateTimeOffset.UtcNow.AddDays(-7);
+        var to = ParseDate(http.Request.Query["to"]) ?? DateTimeOffset.UtcNow;
+
+        http.Response.ContentType = "application/x-ndjson; charset=utf-8";
+        http.Response.Headers.ContentDisposition =
+            $"attachment; filename=\"audit-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.ndjson\"";
+
+        var rows = await db.AuditEvents.AsNoTracking()
+            .Where(e => e.OccurredAt >= from && e.OccurredAt <= to)
+            .OrderBy(e => e.Sequence)
+            .Take(10_000)
+            .ToListAsync(ct);
+
+        foreach (var e in rows)
+        {
+            var line = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                e.EventId,
+                e.Sequence,
+                e.OccurredAt,
+                e.EventType,
+                severity = e.Severity.ToString().ToLowerInvariant(),
+                action = e.Action.ToString().ToLowerInvariant(),
+                e.ActorType,
+                e.ActorId,
+                e.ActorLabel,
+                e.AppId,
+                e.TeamId,
+                e.RequestId,
+                e.ModelAlias,
+                e.ProviderId,
+                e.UpstreamModel,
+                e.RuleId,
+                e.ReasonCode,
+                e.InputTokens,
+                e.InputTokensOriginal,
+                e.OutputTokens,
+                e.CostUsd,
+                billing_owner = e.BillingOwner.ToString().ToLowerInvariant(),
+                e.ContentHash,
+                e.ContentMissing,
+                e.PrevHash,
+                e.Hash
+            });
+
+            await http.Response.WriteAsync(line + "\n", ct);
+        }
+    }
+
+    private static async Task CreateDisputeAsync(
+        HttpContext http, Guid eventId, CreateDisputeRequest request, SessionStore sessions,
+        SecureHubDbContext db, IOptions<SecureHubOptions> options, IClock clock, CancellationToken ct)
+    {
+        var session = RequireSession(http, sessions, options.Value);
+        if (session is null) return;
+
+        var localizer = ApiLocalization.For(http, options);
+        if (!await db.AuditEvents.AnyAsync(e => e.EventId == eventId, ct))
+        {
+            await ApiError.NotFound(localizer).ExecuteAsync(http);
+            return;
+        }
+
+        db.AuditEventDisputes.Add(new AuditEventDispute
+        {
+            EventId = eventId,
+            DisputeType = string.IsNullOrWhiteSpace(request.DisputeType) ? "false_positive" : request.DisputeType,
+            Note = request.Note,
+            CreatedBy = session.UserId,
+            CreatedAt = clock.UtcNow
+        });
+
+        await db.SaveChangesAsync(ct);
+        await http.Response.WriteAsJsonAsync(new { ok = true }, ct);
+    }
+
+    private static async Task ListDisputesAsync(
+        HttpContext http, SessionStore sessions, SecureHubDbContext db,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (RequireAdmin(http, sessions, options.Value, Permission.AuditRead) is null) return;
+
+        var rows = await db.AuditEventDisputes.AsNoTracking()
+            .OrderByDescending(d => d.CreatedAt)
+            .Take(200)
+            .ToListAsync(ct);
+
+        await http.Response.WriteAsJsonAsync(rows.Select(d => new
+        {
+            d.Id,
+            d.EventId,
+            dispute_type = d.DisputeType,
+            d.Note,
+            d.CreatedBy,
+            d.CreatedAt,
+            d.ResolvedAt
+        }), ct);
     }
 
     // ---------- me ----------

@@ -62,7 +62,10 @@ public sealed class AuditWriter
                 _initialized = true;
             }
 
-            evt.OccurredAt = _clock.UtcNow;
+            // 时间规整到毫秒：SQLite 存储为 Unix 毫秒，若内存保留更高精度，
+            // 读回后规范化 JSON 会变化，导致链校验失败。
+            var now = _clock.UtcNow;
+            evt.OccurredAt = DateTimeOffset.FromUnixTimeMilliseconds(now.ToUnixTimeMilliseconds());
             evt.Sequence = ++_sequence;
             evt.PrevHash = _lastHash;
             evt.Hash = ComputeHash(evt.PrevHash, Canonicalize(evt));

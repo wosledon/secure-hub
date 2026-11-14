@@ -1,8 +1,12 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using SecureHub.Api.Auth;
+using SecureHub.Api.Endpoints;
 using SecureHub.Api.Services;
 using SecureHub.Core;
 using SecureHub.Core.Abstractions;
 using SecureHub.Core.Options;
+using SecureHub.Core.Security.Guardrails;
 using SecureHub.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,22 +32,47 @@ builder.Services.AddSecureHubDbContext(o =>
     }
 });
 
-builder.Services.AddHealthChecks();
+Directory.CreateDirectory(hubOptions.Security.DataDirectory);
+Directory.CreateDirectory(Path.Combine(hubOptions.Security.DataDirectory, "keys"));
 
+builder.Services
+    .AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(hubOptions.Security.DataDirectory, "keys")))
+    .SetApplicationName("SecureHub");
+
+builder.Services.AddHttpClient("upstream", c =>
+{
+    c.Timeout = TimeSpan.FromMinutes(5);
+    c.DefaultRequestHeaders.Add("User-Agent", "SecureHub/0.1");
+});
+
+builder.Services.AddSingleton<SessionStore>();
+builder.Services.AddScoped<ApiKeyAuthenticator>();
 builder.Services.AddSingleton<ContentCipher>();
 builder.Services.AddSingleton<AuditWriter>();
+builder.Services.AddSingleton<ProviderCredentialStore>();
 builder.Services.AddScoped<ContentStore>();
 builder.Services.AddScoped<RouteResolver>();
+builder.Services.AddScoped<GuardrailPipeline>(_ => new GuardrailPipeline(
+    [new PiiDetector(), new SecretDetector()],
+    new GuardrailOptionsLike(
+        hubOptions.Guardrails.TotalBudgetMs,
+        hubOptions.Guardrails.PerDetectorBudgetMs,
+        hubOptions.Guardrails.OnError)));
+
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
 if (hubOptions.Database.AutoMigrate)
 {
-    Directory.CreateDirectory(hubOptions.Security.DataDirectory);
     using var scope = app.Services.CreateScope();
     var bootstrapper = scope.ServiceProvider.GetRequiredService<DatabaseBootstrapper>();
     await bootstrapper.InitializeAsync();
 }
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.MapGet("/health", () => Results.Ok(new
 {
@@ -52,6 +81,9 @@ app.MapGet("/health", () => Results.Ok(new
     version = BuildInfo.Version
 }));
 app.MapHealthChecks("/healthz");
+
+app.MapDataPlane();
+app.MapManagement();
 
 app.Run();
 

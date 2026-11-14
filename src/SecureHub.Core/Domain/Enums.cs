@@ -133,6 +133,13 @@ public static class AuditEventTypes
 /// <summary>审计/错误原因码（机器可读，永不本地化）。</summary>
 public static class ReasonCodes
 {
+    public const string InvalidApiKey = "invalid_api_key";
+    public const string InsufficientScope = "insufficient_scope";
+    public const string RequestBlocked = "request_blocked";
+    public const string ContextLengthExceeded = "context_length_exceeded";
+    public const string UpstreamTimeout = "upstream_timeout";
+    public const string UpstreamRateLimited = "upstream_rate_limited";
+    public const string CapabilityUnsupported = "capability_unsupported";
     public const string PiiDetected = "pii_detected";
     public const string SecretDetected = "secret_detected";
     public const string PromptInjection = "prompt_injection";

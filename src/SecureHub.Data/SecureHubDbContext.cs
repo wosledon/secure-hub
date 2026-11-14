@@ -1,8 +1,18 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SecureHub.Core.Domain;
 
 namespace SecureHub.Data;
+
+/// <summary>
+/// SQLite 把 DateTimeOffset 存为 TEXT 时无法做范围比较与排序，
+/// 因此统一转成 Unix 毫秒整数；Postgres 保持原生 timestamptz。
+/// </summary>
+public sealed class DateTimeOffsetToUnixMillisecondsConverter()
+    : ValueConverter<DateTimeOffset, long>(
+        value => value.ToUnixTimeMilliseconds(),
+        value => DateTimeOffset.FromUnixTimeMilliseconds(value));
 
 public sealed class SecureHubDbContext(DbContextOptions<SecureHubDbContext> options) : DbContext(options)
 {
@@ -22,6 +32,16 @@ public sealed class SecureHubDbContext(DbContextOptions<SecureHubDbContext> opti
     public DbSet<ContentBlob> ContentBlobs => Set<ContentBlob>();
     public DbSet<ContentDek> ContentDeks => Set<ContentDek>();
     public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // SQLite 不支持 DateTimeOffset 的比较/排序；转换为整数后索引与范围查询都可用。
+        if (Database.IsSqlite())
+        {
+            configurationBuilder.Properties<DateTimeOffset>()
+                .HaveConversion<DateTimeOffsetToUnixMillisecondsConverter>();
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder b)
     {

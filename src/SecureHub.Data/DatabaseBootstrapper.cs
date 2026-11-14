@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SecureHub.Core.Domain;
+using SecureHub.Core.Options;
 using SecureHub.Core.Security;
 
 namespace SecureHub.Data;
@@ -10,6 +12,7 @@ public sealed record BootstrapResult(string AdminUserName, string? GeneratedPass
 /// <summary>建库/迁移与首次种子数据。</summary>
 public sealed class DatabaseBootstrapper(
     SecureHubDbContext db,
+    IOptions<SecureHubOptions> options,
     ILogger<DatabaseBootstrapper> logger)
 {
     public async Task<BootstrapResult> InitializeAsync(CancellationToken ct = default)
@@ -58,6 +61,11 @@ public sealed class DatabaseBootstrapper(
         logger.LogWarning(
             "Seeded initial admin account '{User}'. One-time password: {Password} (change it immediately).",
             admin.UserName, generatedPassword);
+
+        // 开发便利：首次密码同时落到数据目录，便于本地脚本登录。生产部署应在首次登录后删除该文件。
+        var passwordFile = Path.Combine(options.Value.Security.DataDirectory, "initial-admin-password.txt");
+        await File.WriteAllTextAsync(passwordFile, generatedPassword, ct);
+        logger.LogWarning("One-time password also written to {Path}; delete it after the first sign-in.", passwordFile);
 
         return new BootstrapResult(admin.UserName, generatedPassword);
     }

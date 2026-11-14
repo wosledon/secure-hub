@@ -159,6 +159,12 @@ export const api = {
   metrics: (days = 7) => request<MetricsReport>(`/api/admin/metrics?days=${days}`),
   systemBaseline: () => request<SystemBaseline>('/api/admin/system/baseline'),
   systemSettings: () => request<SystemSettings>('/api/admin/system/settings'),
+  runtimeSettings: () => request<{ values: Record<string, string>; overrides: Record<string, boolean> }>('/api/admin/system/runtime-settings'),
+  updateRuntimeSettings: (body: UpdateRuntimeSettingsBody) =>
+    request<{ ok: boolean; values: Record<string, string> }>('/api/admin/system/runtime-settings', {
+      method: 'PUT',
+      body: JSON.stringify(body)
+    }),
   disputeAudit: (eventId: string, body: { disputeType: string; note?: string }) =>
     request<{ ok: boolean }>(`/api/admin/audit/${eventId}/dispute`, {
       method: 'POST',
@@ -226,6 +232,11 @@ export const api = {
     request<PolicyDryRunResult>('/api/admin/policies/dry-run', {
       method: 'POST',
       body: JSON.stringify(body)
+    }),
+  previewPolicyYaml: (yaml: string) =>
+    request<{ ok: boolean; policies: PublishPolicyBody[] }>('/api/admin/policies/import/preview', {
+      method: 'POST',
+      body: JSON.stringify({ yaml })
     }),
   publishPolicy: (body: PublishPolicyBody) =>
     request<{ version: number; snapshot_reloaded: boolean }>('/api/admin/policies', {
@@ -775,6 +786,21 @@ export interface SystemBaseline {
   checked_at: string;
   healthy: boolean;
   checks: Array<{ id: string; severity: string; message: string; ok: boolean }>;
+}
+
+export interface UpdateRuntimeSettingsBody {
+  contentPersist?: boolean;
+  contentRawDays?: number;
+  contentRedactedDays?: number;
+  contentCompressedDays?: number;
+  contentMaxBytes?: number;
+  guardrailsOnError?: string;
+  guardrailsRedactionMode?: string;
+  guardrailsTokenRetentionHours?: number;
+  compressionEnabled?: boolean;
+  personalEnabled?: boolean;
+  personalAllowedProviders?: string[];
+  personalBlockedUsers?: string[];
 }
 
 export interface SystemSettings {

@@ -37,6 +37,7 @@ public static class DataPlaneEndpoints
         BudgetGuard budgets,
         ProviderCredentialStore credentials,
         KeyRateLimiter rateLimiter,
+        SystemSettingStore runtime,
         SecureHubDbContext db,
         IHttpClientFactory httpClientFactory,
         IOptions<SecureHubOptions> options,
@@ -205,7 +206,8 @@ public static class DataPlaneEndpoints
         }
 
         // 5) 脱敏（mask / placeholder 不可逆；tokenize 可还原）
-        var redactionMode = RedactionTokenStore.ParseMode(options.Value.Guardrails.RedactionMode);
+        var redactionMode = RedactionTokenStore.ParseMode(runtime.GetString(
+            "guardrails.redaction_mode", options.Value.Guardrails.RedactionMode));
         var tokenizedCount = 0;
 
         if (effectiveAction == GuardrailAction.Redact)
@@ -231,7 +233,7 @@ public static class DataPlaneEndpoints
 
         // 6) 压缩
         var compressionSettings = new CompressionSettings(
-            options.Value.Compression.Enabled,
+            runtime.GetBool("compression.enabled", options.Value.Compression.Enabled),
             options.Value.Compression.DetectBoilerplate,
             options.Value.Compression.CollapseRepetition,
             options.Value.Compression.MinRepeats,

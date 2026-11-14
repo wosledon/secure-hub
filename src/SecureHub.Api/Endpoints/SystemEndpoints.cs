@@ -142,7 +142,7 @@ public static class SystemEndpoints
                 blocked_users = blockedUsers
             },
             providers = new { total = providerCount },
-            note = "Settings are configuration-only; change appsettings or environment variables and restart."
+            note = "Startup, network, and database settings are configuration-only; security runtime settings can be changed in the console."
         }, ct);
     }
 

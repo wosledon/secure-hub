@@ -40,6 +40,7 @@ public class SecureHubDbContext : DbContext
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<CatalogModel> CatalogModels => Set<CatalogModel>();
     public DbSet<CatalogProvider> CatalogProviders => Set<CatalogProvider>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<AssistantSession> AssistantSessions => Set<AssistantSession>();
     public DbSet<AssistantMessage> AssistantMessages => Set<AssistantMessage>();
     public DbSet<RedactionToken> RedactionTokens => Set<RedactionToken>();
@@ -254,6 +255,13 @@ public class SecureHubDbContext : DbContext
             e.Property(x => x.Api).HasMaxLength(500);
             e.Property(x => x.Doc).HasMaxLength(500);
             e.Property(x => x.Npm).HasMaxLength(200);
+        });
+
+        b.Entity<SystemSetting>(e =>
+        {
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasMaxLength(100);
+            e.Property(x => x.Value).HasMaxLength(2000).IsRequired();
         });
 
         b.Entity<AssistantSession>(e =>

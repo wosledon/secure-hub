@@ -959,6 +959,28 @@ namespace SecureHub.Data.Migrations.Sqlite
                     b.ToTable("SecurityPolicyVersions");
                 });
 
+            modelBuilder.Entity("SecureHub.Core.Domain.SystemSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("SystemSettings");
+                });
+
             modelBuilder.Entity("SecureHub.Core.Domain.Team", b =>
                 {
                     b.Property<Guid>("Id")

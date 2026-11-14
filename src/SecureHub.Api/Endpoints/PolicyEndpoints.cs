@@ -30,6 +30,8 @@ public sealed record PolicyWhenDto(PolicyDetectorDto[]? Any, PolicyDetectorDto[]
 
 public sealed record PolicyThenDto(string Action, string Reason, string? RuleId);
 
+public sealed record PolicyYamlRequest(string Yaml);
+
 public static class PolicyEndpoints
 {
     public static void MapPolicies(this IEndpointRouteBuilder app)
@@ -40,6 +42,7 @@ public static class PolicyEndpoints
         group.MapPost("", PublishAsync);
         group.MapPost("/{policyKey}/activate", ActivateAsync);
         group.MapPost("/dry-run", DryRunAsync);
+        group.MapPost("/import/preview", PreviewYamlAsync);
     }
 
     private static IResult Snapshot(HttpContext http, PolicyStore store) =>
@@ -79,6 +82,106 @@ public static class PolicyEndpoints
                 all = p.Condition.All.Select(d => d.Detector)
             })
         });
+
+    private static void NormalizeScalars(System.Text.Json.Nodes.JsonNode? node)
+    {
+        if (node is System.Text.Json.Nodes.JsonObject obj)
+        {
+            foreach (var key in obj.Select(property => property.Key).ToList())
+            {
+                if (TryConvertScalar(obj[key], out var converted))
+                {
+                    obj[key] = converted;
+                }
+                else
+                {
+                    NormalizeScalars(obj[key]);
+                }
+            }
+        }
+        else if (node is System.Text.Json.Nodes.JsonArray array)
+        {
+            for (var index = 0; index < array.Count; index++)
+            {
+                if (TryConvertScalar(array[index], out var converted))
+                {
+                    array[index] = converted;
+                }
+                else
+                {
+                    NormalizeScalars(array[index]);
+                }
+            }
+        }
+    }
+
+    private static bool TryConvertScalar(
+        System.Text.Json.Nodes.JsonNode? node,
+        out System.Text.Json.Nodes.JsonNode? converted)
+    {
+        converted = null;
+        if (node is not System.Text.Json.Nodes.JsonValue value ||
+            !value.TryGetValue<string>(out var text))
+        {
+            return false;
+        }
+
+        if (int.TryParse(text, out var integer))
+        {
+            converted = System.Text.Json.Nodes.JsonValue.Create(integer);
+            return true;
+        }
+
+        if (decimal.TryParse(text, System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture, out var number))
+        {
+            converted = System.Text.Json.Nodes.JsonValue.Create(number);
+            return true;
+        }
+
+        if (bool.TryParse(text, out var boolean))
+        {
+            converted = System.Text.Json.Nodes.JsonValue.Create(boolean);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static async Task PreviewYamlAsync(
+        HttpContext http, PolicyYamlRequest request, SessionStore sessions,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (!Require(http, sessions, options.Value, Permission.SecurityWrite)) return;
+
+        var localizer = ApiLocalization.For(http, options);
+        if (string.IsNullOrWhiteSpace(request.Yaml))
+        {
+            await ApiError.Create(400, "validation.required", localizer).ExecuteAsync(http);
+            return;
+        }
+
+        try
+        {
+            var deserializer = new YamlDotNet.Serialization.DeserializerBuilder()
+                .WithDuplicateKeyChecking()
+                .Build();
+            var model = deserializer.Deserialize<object>(request.Yaml);
+            var json = System.Text.Json.JsonSerializer.Serialize(model);
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            var normalized = System.Text.Json.Nodes.JsonNode.Parse(json);
+            NormalizeScalars(normalized);
+            await http.Response.WriteAsJsonAsync(new
+            {
+                ok = true,
+                policies = normalized
+            }, ct);
+        }
+        catch (Exception)
+        {
+            await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
+        }
+    }
 
     private static async Task ListAsync(
         HttpContext http, SessionStore sessions, SecureHubDbContext db,

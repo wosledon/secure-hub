@@ -2,12 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
   Divider,
+  FormControlLabel,
   IconButton,
+  MenuItem,
   Stack,
+  Switch,
+  TextField,
   Tooltip,
   Typography
 } from '@mui/material';
@@ -25,15 +30,20 @@ export default function SystemPage() {
   const format = useFormatters();
   const [baseline, setBaseline] = useState<SystemBaseline | null>(null);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [runtimeValues, setRuntimeValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [baselineResult, settingsResult] = await Promise.all([api.systemBaseline(), api.systemSettings()]);
+      const [baselineResult, settingsResult, runtimeResult] = await Promise.all([api.systemBaseline(), api.systemSettings(), api.runtimeSettings()]);
       setBaseline(baselineResult);
       setSettings(settingsResult);
+      setRuntimeValues(runtimeResult.values);
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -42,6 +52,32 @@ export default function SystemPage() {
     severity === 'critical' ? <ErrorOutlineIcon color="error" fontSize="small" />
       : severity === 'warning' ? <WarningAmberIcon color="warning" fontSize="small" />
         : <CheckCircleOutlineIcon color="success" fontSize="small" />;
+
+  const update = (key: string, value: string) =>
+    setRuntimeValues((current) => ({ ...current, [key]: value }));
+
+  const saveRuntime = async () => {
+    setSaving(true);
+    setRuntimeError(null);
+    try {
+      const result = await api.updateRuntimeSettings({
+        contentPersist: runtimeValues['content.persist'] === 'true',
+        contentRawDays: Number(runtimeValues['content.raw_days']),
+        contentRedactedDays: Number(runtimeValues['content.redacted_days']),
+        contentCompressedDays: Number(runtimeValues['content.compressed_days']),
+        contentMaxBytes: Number(runtimeValues['content.max_bytes']),
+        guardrailsOnError: runtimeValues['guardrails.on_error'],
+        guardrailsRedactionMode: runtimeValues['guardrails.redaction_mode'],
+        guardrailsTokenRetentionHours: Number(runtimeValues['guardrails.token_retention_hours']),
+        compressionEnabled: runtimeValues['compression.enabled'] === 'true',
+        personalEnabled: runtimeValues['personal.enabled'] === 'true',
+        personalAllowedProviders: (runtimeValues['personal.allowed_providers'] ?? '').split(',').map((value) => value.trim()).filter(Boolean),
+        personalBlockedUsers: (runtimeValues['personal.blocked_users'] ?? '').split(',').map((value) => value.trim()).filter(Boolean)
+      });
+      setRuntimeValues(result.values);
+      setMessage(t('system.saved'));
+    } catch (err) { setRuntimeError((err as Error).message); } finally { setSaving(false); }
+  };
 
   return (
     <Stack spacing={3}>
@@ -82,6 +118,35 @@ export default function SystemPage() {
               ))}
             </Stack>
             <Box px={2.5} py={1.5}><Typography variant="caption" color="text.secondary">{t('system.checkedAt', { time: format.fullDateTime(baseline?.checked_at ?? new Date()) })}</Typography></Box>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+                <Box><Typography variant="h2">{t('system.runtime')}</Typography><Typography variant="body2" color="text.secondary" mt={0.5}>{t('system.runtimeHint')}</Typography></Box>
+                <Button variant="contained" onClick={() => void saveRuntime()} disabled={saving}>{saving ? t('common.working') : t('common.save')}</Button>
+              </Stack>
+              {message && <Alert severity="success" onClose={() => setMessage(null)} sx={{ mt: 2 }}>{message}</Alert>}
+              {runtimeError && <Alert severity="error" sx={{ mt: 2 }}>{runtimeError}</Alert>}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 2, mt: 2 }}>
+                <FormControlLabel control={<Switch checked={runtimeValues['content.persist'] === 'true'} onChange={(event) => update('content.persist', event.target.checked ? 'true' : 'false')} />} label={t('system.persistToggle')} />
+                <FormControlLabel control={<Switch checked={runtimeValues['compression.enabled'] === 'true'} onChange={(event) => update('compression.enabled', event.target.checked ? 'true' : 'false')} />} label={t('system.compressionToggle')} />
+                <FormControlLabel control={<Switch checked={runtimeValues['personal.enabled'] === 'true'} onChange={(event) => update('personal.enabled', event.target.checked ? 'true' : 'false')} />} label={t('system.byokToggle')} />
+                <TextField type="number" label={t('system.rawDays')} value={runtimeValues['content.raw_days'] ?? ''} onChange={(event) => update('content.raw_days', event.target.value)} inputProps={{ min: 1, max: 3650 }} />
+                <TextField type="number" label={t('system.redactedDays')} value={runtimeValues['content.redacted_days'] ?? ''} onChange={(event) => update('content.redacted_days', event.target.value)} inputProps={{ min: 1, max: 3650 }} />
+                <TextField type="number" label={t('system.compressedDays')} value={runtimeValues['content.compressed_days'] ?? ''} onChange={(event) => update('content.compressed_days', event.target.value)} inputProps={{ min: 1, max: 3650 }} />
+                <TextField type="number" label={t('system.maxBytes')} value={runtimeValues['content.max_bytes'] ?? ''} onChange={(event) => update('content.max_bytes', event.target.value)} inputProps={{ min: 1024, max: 16777216 }} />
+                <TextField select label={t('system.onError')} value={runtimeValues['guardrails.on_error'] ?? 'block'} onChange={(event) => update('guardrails.on_error', event.target.value)}>
+                  <MenuItem value="block">block</MenuItem><MenuItem value="allow">allow</MenuItem>
+                </TextField>
+                <TextField select label={t('system.redactionMode')} value={runtimeValues['guardrails.redaction_mode'] ?? 'mask'} onChange={(event) => update('guardrails.redaction_mode', event.target.value)}>
+                  <MenuItem value="mask">mask</MenuItem><MenuItem value="placeholder">placeholder</MenuItem><MenuItem value="tokenize">tokenize</MenuItem>
+                </TextField>
+                <TextField type="number" label={t('system.tokenHours')} value={runtimeValues['guardrails.token_retention_hours'] ?? ''} onChange={(event) => update('guardrails.token_retention_hours', event.target.value)} inputProps={{ min: 1, max: 720 }} />
+                <TextField label={t('system.allowedProviders')} value={runtimeValues['personal.allowed_providers'] ?? ''} onChange={(event) => update('personal.allowed_providers', event.target.value)} helperText={t('system.csvHint')} />
+                <TextField label={t('system.blockedUsers')} value={runtimeValues['personal.blocked_users'] ?? ''} onChange={(event) => update('personal.blocked_users', event.target.value)} helperText={t('system.csvHint')} />
+              </Box>
+            </CardContent>
           </Card>
 
           <Card>

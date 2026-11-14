@@ -58,6 +58,7 @@ builder.Services.AddSingleton<ProviderCredentialStore>();
 builder.Services.AddSingleton<PolicyStore>();
 builder.Services.AddScoped<BudgetGuard>();
 builder.Services.AddSingleton<KeyRateLimiter>();
+builder.Services.AddSingleton<SystemSettingStore>();
 builder.Services.AddSingleton<CatalogSyncService>();builder.Services.AddHostedService(sp => sp.GetRequiredService<CatalogSyncService>());
 builder.Services.AddScoped<ContentStore>();
 builder.Services.AddScoped<RedactionTokenStore>();
@@ -65,12 +66,17 @@ builder.Services.AddScoped<RouteResolver>();
 builder.Services.AddScoped<AssistantToolbox>();
 builder.Services.AddScoped<AssistantSessionStore>();
 builder.Services.AddScoped<AuditAssistant>();
-builder.Services.AddScoped<GuardrailPipeline>(_ => new GuardrailPipeline(
-    [new PiiDetector(), new SecretDetector()],
-    new GuardrailOptionsLike(
-        hubOptions.Guardrails.TotalBudgetMs,
-        hubOptions.Guardrails.PerDetectorBudgetMs,
-        hubOptions.Guardrails.OnError)));
+builder.Services.AddScoped<GuardrailPipeline>(sp =>
+{
+    var settings = sp.GetRequiredService<SystemSettingStore>();
+    var onError = settings.GetString("guardrails.on_error", hubOptions.Guardrails.OnError);
+    return new GuardrailPipeline(
+        [new PiiDetector(), new SecretDetector()],
+        new GuardrailOptionsLike(
+            hubOptions.Guardrails.TotalBudgetMs,
+            hubOptions.Guardrails.PerDetectorBudgetMs,
+            onError));
+});
 
 builder.Services.AddHealthChecks();
 
@@ -85,6 +91,7 @@ if (hubOptions.Database.AutoMigrate)
 
 // 策略快照必须在开始服务前加载；失败只记录错误，不阻断启动（快照为空 = 无策略）。
 await app.Services.GetRequiredService<PolicyStore>().RefreshAsync();
+await app.Services.GetRequiredService<SystemSettingStore>().RefreshAsync();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -110,6 +117,9 @@ app.MapAuditDeep();
 app.MapUsageInsights();
 app.MapMetrics();
 app.MapSystem();
+app.MapRuntimeSettings();
+app.MapMcp();
+app.MapNativePassthrough();
 app.MapEmbeddings();
 
 // SPA 回退：/admin、/me 等前端路由返回 index.html；

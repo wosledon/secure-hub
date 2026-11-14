@@ -13,7 +13,8 @@ public sealed class ContentStore(
     SecureHubDbContext db,
     ContentCipher cipher,
     IClock clock,
-    IOptions<SecureHubOptions> options)
+    IOptions<SecureHubOptions> options,
+    SystemSettingStore runtime)
 {
     public async Task SaveAsync(
         string requestId,
@@ -26,18 +27,20 @@ public sealed class ContentStore(
     {
         var settings = options.Value.Content;
         // force：员工流量（含 BYOK）必须落盘，不受全局开关影响。
-        if (!force && !settings.PersistContent) return;
+        var persist = runtime.GetBool("content.persist", settings.PersistContent);
+        if (!force && !persist) return;
 
-        var (truncatedText, truncated) = TruncateToBytes(text, settings.MaxContentBytes);
+        var maxBytes = runtime.GetInt("content.max_bytes", settings.MaxContentBytes, 1024, 16 * 1024 * 1024);
+        var (truncatedText, truncated) = TruncateToBytes(text, maxBytes);
 
         var aad = ContentCipher.BuildAad(requestId, direction.ToString(), variant.ToString());
         var (cipherBytes, nonce, tag) = cipher.Seal(truncatedText, aad);
 
         var days = variant switch
         {
-            ContentVariant.Raw => settings.RawRetentionDays,
-            ContentVariant.Redacted => settings.RedactedRetentionDays,
-            _ => settings.CompressedRetentionDays
+            ContentVariant.Raw => runtime.GetInt("content.raw_days", settings.RawRetentionDays, 1, 3650),
+            ContentVariant.Redacted => runtime.GetInt("content.redacted_days", settings.RedactedRetentionDays, 1, 3650),
+            _ => runtime.GetInt("content.compressed_days", settings.CompressedRetentionDays, 1, 3650)
         };
 
         var now = clock.UtcNow;

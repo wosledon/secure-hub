@@ -92,7 +92,7 @@ export const zhCN = {
     activate: '激活此版本', activateTitle: '激活版本 v{{version}}？', activateHint: '激活后，网关会立即重载策略快照。',
     published: '策略 v{{version}} 已发布', activated: '已激活策略 v{{version}}', snapshotCount: '{{count}} 条编译策略',
     snapshotOk: '策略快照已加载', snapshotEmpty: '当前没有生效策略', reason: '变更原因',
-    export: '导出', import: '导入', importHint: '粘贴策略数组（与导出格式一致）。每条会生成新版本，失败项会单独列出。',
+    export: '导出', import: '导入', importFormat: '格式', importHint: '粘贴策略数组（与导出格式一致）。支持 JSON 或 YAML；每条会生成新版本，失败项会单独列出。',
     importResult: '导入完成：成功 {{ok}} 条，失败 {{failed}} 条', importEmpty: '没有可导入的策略', importFailedMarker: '失败',
     observation: '观察模式（只记录不阻断）', observationHint: '观察模式会把命中动作降为 alert，只写审计不拦截请求。'
   },
@@ -178,6 +178,7 @@ export const zhCN = {
     content_purged: '过期审计内容已清理', rate_limited: '请求被限流', provider_updated: '供应商已更新',
     provider_disabled: '供应商已停用', provider_tested: '供应商连通性已检测', provider_credential_rotated: '供应商凭据已轮换',
     entitlement_updated: '访问授权已更新', entitlement_revoked: '访问授权已删除', key_constraints_updated: '密钥约束已更新',
+    system_settings_updated: '运行期配置已更新',
     user_created: '用户已创建', user_updated: '用户已更新', user_deactivated: '用户已停用',
     user_password_reset: '用户密码已重置', team_created: '团队已创建', team_updated: '团队已更新',
     app_created: '应用已创建', app_updated: '应用已更新'
@@ -250,14 +251,19 @@ export const zhCN = {
     byProvider: '按供应商'
   },
   system: {
-    title: '系统', description: '安全基线自检与当前生效配置；配置变更通过 appsettings 或环境变量完成。',
+    title: '系统', description: '安全基线自检与运行期配置；安全相关设置保存后立即生效。',
     database: '数据库', autoMigrate: '自动迁移：{{value}}', https: 'HTTPS', byok: '个人 BYOK',
     byokDetail: '白名单 {{allowed}} · 禁用用户 {{blocked}}', providers: '供应商', providerHint: '已接入供应商总数',
     baseline: '安全基线', baselineHint: '启动后可按需重新检查', healthy: '全部通过', attention: '需要关注',
     checkedAt: '检查时间 {{time}}', effective: '生效配置', contentRetention: '内容留存',
     persistOn: '已开启正文留存', persistOff: '全局正文留存已关闭（员工流量仍强制记录）',
     guardrails: '护栏', session: '会话有效期', bodyLimit: '请求体上限',
-    configOnly: '这些值来自配置，不在控制台内热修改；修改后重启服务生效。',
+    configOnly: '启动、网络与数据库设置仍来自配置文件；上方的运行期配置可热更新。',
+    runtime: '运行期配置', runtimeHint: '保存后立即生效，覆盖 appsettings 中的对应默认值。',
+    saved: '运行期配置已保存', persistToggle: '正文留存', compressionToggle: '内容压缩', byokToggle: '个人 BYOK',
+    rawDays: '原文留存天数', redactedDays: '脱敏后留存天数', compressedDays: '压缩后留存天数', maxBytes: '单条正文上限 (B)',
+    onError: '检测异常时', redactionMode: '脱敏模式', tokenHours: '脱敏令牌小时', allowedProviders: 'BYOK 白名单',
+    blockedUsers: 'BYOK 禁用用户', csvHint: '逗号分隔',
     check: {
       audit_chain: '审计链', bootstrap_password_removed: '初始管理员密码文件', data_protection_keys: '数据保护密钥',
       content_key: '内容加密密钥', https: '传输安全', content_retention: '内容留存', provider_credentials: '供应商凭据',
@@ -365,7 +371,7 @@ export const en = {
     activate: 'Activate version', activateTitle: 'Activate version v{{version}}?', activateHint: 'The gateway will immediately reload its compiled policy snapshot.',
     published: 'Policy v{{version}} published', activated: 'Policy v{{version}} activated', snapshotCount: '{{count}} compiled policies',
     snapshotOk: 'Policy snapshot loaded', snapshotEmpty: 'No active policies', reason: 'Change reason',
-    export: 'Export', import: 'Import', importHint: 'Paste an array of policies in the export format. Each entry creates a new version; failures are listed individually.',
+    export: 'Export', import: 'Import', importFormat: 'Format', importHint: 'Paste an array of policies in the export format. JSON or YAML; each entry creates a new version and failures are listed.',
     importResult: 'Import finished: {{ok}} succeeded, {{failed}} failed', importEmpty: 'No policies to import', importFailedMarker: 'failed',
     observation: 'Observation mode (record only)', observationHint: 'Observation mode downgrades matches to alert: audits are written but requests are not blocked.'
   },
@@ -451,6 +457,7 @@ export const en = {
     content_purged: 'Expired audit content purged', rate_limited: 'Request rate limited', provider_updated: 'Provider updated',
     provider_disabled: 'Provider disabled', provider_tested: 'Provider connectivity tested', provider_credential_rotated: 'Provider credential rotated',
     entitlement_updated: 'Entitlement updated', entitlement_revoked: 'Entitlement removed', key_constraints_updated: 'Key constraints updated',
+    system_settings_updated: 'Runtime settings updated',
     user_created: 'User created', user_updated: 'User updated', user_deactivated: 'User deactivated',
     user_password_reset: 'User password reset', team_created: 'Team created', team_updated: 'Team updated',
     app_created: 'Application created', app_updated: 'Application updated'
@@ -526,14 +533,19 @@ export const en = {
     byProvider: 'By provider'
   },
   system: {
-    title: 'System', description: 'Security baseline checks and effective configuration. Changes are made through appsettings or environment variables.',
+    title: 'System', description: 'Security baseline checks and runtime settings. Security-related changes take effect immediately.',
     database: 'Database', autoMigrate: 'Auto-migrate: {{value}}', https: 'HTTPS', byok: 'Personal BYOK',
     byokDetail: '{{allowed}} allowlisted · {{blocked}} blocked users', providers: 'Providers', providerHint: 'Connected providers',
     baseline: 'Security baseline', baselineHint: 'Re-run the checks at any time', healthy: 'All checks passed', attention: 'Needs attention',
     checkedAt: 'Checked {{time}}', effective: 'Effective configuration', contentRetention: 'Content retention',
     persistOn: 'Content persistence enabled', persistOff: 'Global content persistence disabled (employee traffic is still recorded)',
     guardrails: 'Guardrails', session: 'Session lifetime', bodyLimit: 'Request body limit',
-    configOnly: 'These values come from configuration and are not editable in the console; restart after changing them.',
+    configOnly: 'Startup, network, and database settings still come from configuration; runtime settings above update live.',
+    runtime: 'Runtime settings', runtimeHint: 'Saved values take effect immediately and override appsettings defaults.',
+    saved: 'Runtime settings saved', persistToggle: 'Content persistence', compressionToggle: 'Compression', byokToggle: 'Personal BYOK',
+    rawDays: 'Raw retention (days)', redactedDays: 'Redacted retention (days)', compressedDays: 'Compressed retention (days)', maxBytes: 'Max content bytes',
+    onError: 'On detector error', redactionMode: 'Redaction mode', tokenHours: 'Redaction token hours', allowedProviders: 'BYOK allowlist',
+    blockedUsers: 'BYOK blocked users', csvHint: 'Comma-separated',
     check: {
       audit_chain: 'Audit chain', bootstrap_password_removed: 'Bootstrap password file', data_protection_keys: 'Data protection keys',
       content_key: 'Content encryption key', https: 'Transport security', content_retention: 'Content retention', provider_credentials: 'Provider credentials',

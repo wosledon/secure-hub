@@ -21,7 +21,8 @@ public sealed class RedactionTokenStore(
     SecureHubDbContext db,
     ContentCipher cipher,
     IClock clock,
-    IOptions<SecureHubOptions> options)
+    IOptions<SecureHubOptions> options,
+    SystemSettingStore runtime)
 {
     /// <summary>令牌格式：⟦sh:&lt;32 hex&gt;⟧。用非 ASCII 括号降低与业务文本碰撞的概率。</summary>
     private static readonly Regex TokenPattern = new(
@@ -44,7 +45,9 @@ public sealed class RedactionTokenStore(
         var replaced = 0;
         var index = 0;
         var now = clock.UtcNow;
-        var expires = now.AddHours(Math.Clamp(options.Value.Guardrails.TokenRetentionHours, 1, 720));
+        var expires = now.AddHours(runtime.GetInt(
+            "guardrails.token_retention_hours",
+            options.Value.Guardrails.TokenRetentionHours, 1, 720));
 
         foreach (var detection in detections)
         {

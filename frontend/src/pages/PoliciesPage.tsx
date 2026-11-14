@@ -54,6 +54,7 @@ export default function PoliciesPage() {
   const [snapshot, setSnapshot] = useState<PolicySnapshot | null>(null);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [activateTarget, setActivateTarget] = useState<{ policyKey: string; version: number } | null>(null);
+  const [importFormat, setImportFormat] = useState<'json' | 'yaml'>('json');
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
   const [importing, setImporting] = useState(false);
@@ -125,7 +126,9 @@ export default function PoliciesPage() {
     setImporting(true);
     setImportResult(null);
     try {
-      const parsed = JSON.parse(importText) as PublishPolicyBody[];
+      const parsed = importFormat === 'yaml'
+        ? (await api.previewPolicyYaml(importText)).policies
+        : JSON.parse(importText) as PublishPolicyBody[];
       if (!Array.isArray(parsed) || parsed.length === 0) throw new Error(t('policies.importEmpty'));
       let ok = 0;
       const failures: string[] = [];
@@ -236,7 +239,11 @@ export default function PoliciesPage() {
         <DialogContent>
           <Stack spacing={2} mt={1}>
             <Alert severity="info">{t('policies.importHint')}</Alert>
-            <TextField multiline minRows={10} label="JSON" value={importText} onChange={(event) => setImportText(event.target.value)} autoComplete="off" sx={{ '& textarea': { fontFamily: 'monospace', fontSize: 12 } }} />
+            <TextField select label={t('policies.importFormat')} value={importFormat} onChange={(event) => setImportFormat(event.target.value as 'json' | 'yaml')}>
+              <MenuItem value="json">JSON</MenuItem>
+              <MenuItem value="yaml">YAML</MenuItem>
+            </TextField>
+            <TextField multiline minRows={10} label={importFormat.toUpperCase()} value={importText} onChange={(event) => setImportText(event.target.value)} autoComplete="off" sx={{ '& textarea': { fontFamily: 'monospace', fontSize: 12 } }} />
             {importResult && <Alert severity={importResult.includes(t('policies.importFailedMarker')) ? 'warning' : 'success'} sx={{ whiteSpace: 'pre-wrap' }}>{importResult}</Alert>}
           </Stack>
         </DialogContent>

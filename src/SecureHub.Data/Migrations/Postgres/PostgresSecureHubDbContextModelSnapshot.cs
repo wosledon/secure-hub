@@ -964,6 +964,28 @@ namespace SecureHub.Data.Migrations.Postgres
                     b.ToTable("SecurityPolicyVersions");
                 });
 
+            modelBuilder.Entity("SecureHub.Core.Domain.SystemSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("SystemSettings");
+                });
+
             modelBuilder.Entity("SecureHub.Core.Domain.Team", b =>
                 {
                     b.Property<Guid>("Id")

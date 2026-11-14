@@ -169,6 +169,7 @@ public static class AuditEventTypes
     public const string EntitlementRevoked = "entitlement_revoked";
     public const string KeyConstraintsUpdated = "key_constraints_updated";
     public const string RateLimited = "rate_limited";
+    public const string SystemSettingsUpdated = "system_settings_updated";
     public const string ContentPurged = "content_purged";
 }
 

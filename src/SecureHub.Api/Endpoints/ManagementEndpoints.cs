@@ -828,22 +828,28 @@ public static class ManagementEndpoints
     private static async Task CreateMyProviderAsync(
         HttpContext http, CreateProviderRequest request, SessionStore sessions,
         SecureHubDbContext db, ProviderCredentialStore credentials,
-        AuditWriter audit, IOptions<SecureHubOptions> options, IClock clock, CancellationToken ct)
+        AuditWriter audit, SystemSettingStore runtime, IOptions<SecureHubOptions> options, IClock clock, CancellationToken ct)
     {
         var session = RequireSession(http, sessions, options.Value);
         if (session is null) return;
 
         var localizer = ApiLocalization.For(http, options);
 
-        if (!options.Value.PersonalProviders.Enabled ||
-            options.Value.PersonalProviders.BlockedUsers.Contains(session.UserId))
+        if (!runtime.GetBool("personal.enabled", options.Value.PersonalProviders.Enabled) ||
+            runtime.GetGuidList("personal.blocked_users").Contains(session.UserId))
         {
             await ApiError.Forbidden(localizer, ReasonCodes.ByokDisabled).ExecuteAsync(http);
             return;
         }
 
-        if (options.Value.PersonalProviders.AllowedProviders.Length > 0 &&
-            !options.Value.PersonalProviders.AllowedProviders.Contains(request.ProviderKey, StringComparer.OrdinalIgnoreCase))
+        var allowedProviders = runtime.GetList("personal.allowed_providers");
+        if (allowedProviders.Length == 0)
+        {
+            allowedProviders = options.Value.PersonalProviders.AllowedProviders;
+        }
+
+        if (allowedProviders.Length > 0 &&
+            !allowedProviders.Contains(request.ProviderKey, StringComparer.OrdinalIgnoreCase))
         {
             await ApiError.Forbidden(localizer, ReasonCodes.ProviderNotAllowed).ExecuteAsync(http);
             return;

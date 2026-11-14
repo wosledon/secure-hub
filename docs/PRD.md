@@ -43,7 +43,7 @@
 | T15 | 管理端 TOTP  | **暂不强制**，保留可选启用                                                      | 见 §7.1.3                         |
 | T16 | 输入压缩     | **文本级去冗余**（不是 gzip）；前后 token 可对比                                | 见 §6.5；字节压缩只用于传输/存储  |
 | T17 | 产品形态     | **双端**：管理端（企业配置）+ 用户端（员工自助）                                | 见 §9                             |
-| T18 | 个人接入     | **允许 BYOK**：员工可用自己的供应商 Key，企业不承担其 token 成本                | 见 §5.5、§7.8                     |
+| T18 | 个人接入     | **允许 BYOK**：员工可用自己的供应商 Key，企业不承担其 token 成本；**员工流量审计固定完整** | 见 §5.5、§7.8 |
 | T19 | 交付边界     | **平台不做网络拦截**（域名封禁/流量识别/SSL 解密）；拦截由企业 DNS/内网网关执行 | 见 §4.6                           |
 | T20 | 企业分配     | 企业供应商可按团队/个人授权；用户端可见「分配给我的 + 我自己的」                | 见 §5.6                           |
 | T21 | 统一入口     | **一个 endpoint + 一套 key**；来源与供应商靠**三级模型 ID** 区分                | 见 §10.3                          |
@@ -333,7 +333,7 @@ SecureHub.slnx
 | `personalProviders.enabled`          | 是否允许 BYOK                                      | 开                 |
 | `personalProviders.allowedProviders` | 允许个人接入的 provider id 列表（取自 models.dev） | 空 = 全部允许      |
 | `personalProviders.guardrails`       | 个人流量是否照样跑护栏                             | **是（不可关闭）** |
-| `personalProviders.auditLevel`       | `full` / `metadata` / `off`                        | `full`（见 §7.8）  |
+| 员工流量审计粒度（无配置项）         | 固定完整，不可降级                                 | 见 §7.8.2          |
 | `personalProviders.blockedUsers`     | 禁用 BYOK 的用户                                   | 空                 |
 
 **员工流程**：用户端选供应商（目录）→ 填入自己的 Key → 绑定本人 → 立即可用。
@@ -346,7 +346,7 @@ SecureHub.slnx
 | 管理员能看到个人 Key 明文吗 | UI 不提供；解密只发生在调用路径，且计数告警       |
 | 个人流量占企业预算吗        | 不占；`billingOwner=user` 单独记账（§8.1）        |
 | 个人能用企业禁止的供应商吗  | 不能：`allowedProviders` 白名单                   |
-| 企业能看到员工发了什么吗    | 取决于 `auditLevel`，默认 `full`（与 T10 一致）   |
+| 企业能看到员工发了什么吗    | 能。员工流量恒记录正文（与 T10 一致），不可关闭   |
 | 员工离岗后                  | 账号停用 → 个人绑定与密钥自动失效；历史审计仍保留 |
 
 ### 5.6 企业向员工分配供应商与模型（T20）
@@ -626,7 +626,7 @@ loadBalancing:
 1. 响应头 `x-securehub-billing: org | user`，并在用户端展示"本次由谁结算"。
 2. 员工首次遇到个人账命中时给一次提示（可关闭），避免月底看账单才惊讶。
 
-> 数据流动同理：企业流量走个人 Key 时，内容进入个人账户对应的供应商。这属于合规告知范畴，由 `auditLevel` 与员工告知覆盖，**不在路由层做拦截**。
+> 数据流动同理：企业流量走个人 Key 时，内容进入个人账户对应的供应商。这属于合规告知范畴，由员工告知覆盖（§7.8.3），**不在路由层做拦截**。
 
 #### 6.6.6 可观测性（调权重的依据）
 
@@ -1161,7 +1161,7 @@ onError: block                # block | allow
 | **企业分配给我的供应商与模型**      | 读（含来源与额度）                   |
 | 本人虚拟密钥                        | 读写，仅限本人（可自建、吊销、轮换） |
 | 本人用量                            | 读                                   |
-| 本人审计事件                        | 读（可见字段受 `auditLevel` 约束）   |
+| 本人审计事件                        | 读（本人全部字段，不可跨用户）       |
 | 本人 AI 会话                        | 读写                                 |
 | 误报申诉                            | 提交（仅本人事件）                   |
 | 企业供应商 / 策略 / 目录 / 他人数据 | **无**                               |
@@ -1172,15 +1172,21 @@ onError: block                # block | allow
 2. 个人用户查询任何 API 都**强制注入** `WHERE OwnerUserId = currentUser`，不依赖前端传参。
 3. 个人 BYOK 凭据只能被其属主触发使用；管理员**不能**代调用。
 
-#### 7.8.2 审计粒度（`personalProviders.auditLevel`）
+#### 7.8.2 审计粒度（固定完整，不可配置）
 
-| 级别           | 元数据 | 护栏检测 | 正文                      | 说明                                       |
-| -------------- | ------ | -------- | ------------------------- | ------------------------------------------ |
-| `full`（默认） | ✅      | ✅        | ✅（`raw` + `compressed`） | 与 T10 一致；合规优先                      |
-| `metadata`     | ✅      | ✅        | ❌ 仅哈希与大小            | 员工隐私顾虑较大时的折中                   |
-| `off`          | 仅计数 | ❌        | ❌                         | **不建议**：等于放弃审计，且与企业目标冲突 |
+员工流量（含 BYOK 与使用企业分配模型）的审计粒度**恒为完整**，不存在可降级的档位：
 
-> **无论哪一档，护栏都照常执行。** `auditLevel` 只决定"记多少"，不决定"拦不拦"。把两者混在一起是设计错误——那会让员工以为"不记录"就等于"不检查"。
+| 字段            | 是否记录                | 说明                                                    |
+| --------------- | ----------------------- | ------------------------------------------------------- |
+| 元数据          | ✅ 全部                 | 时间、模型、供应商、token、成本、结果、策略命中         |
+| 护栏检测结果    | ✅ 全部                 | 命中的规则、动作、策略版本                              |
+| 请求/响应正文   | ✅（`raw` + `redacted`） | 与全局 `content.persist` 解耦：**开关只影响企业流量**   |
+
+实现要点：`ContentStore.SaveAsync(..., force: true)` 由 `OwnerType == User` 决定，配置项无法关闭。
+
+> **为什么不做三档：** 早期草案设计过 `full` / `metadata` / `off` 三档。放弃的原因是——一旦允许企业把员工正文记录关掉，事后追责就失去唯一证据源，而这正是审计网关的核心价值；同时"只记录元数据"在员工侧并不能带来真实隐私收益（哈希与大小同样可关联），却制造了"已合规"的错觉。隐私诉求改由 §7.8.3 的透明告知与企业政策解决，而不是削弱证据链。
+
+> **护栏与记录解耦：** 护栏永远执行，且执行结果永远记录。不存在"不记录"等于"不检查"的档位。
 
 #### 7.8.3 透明告知
 
@@ -1232,7 +1238,7 @@ onError: block                # block | allow
 - **审计台**：多条件检索、证据链详情、**正文查看（默认折叠，点击展开并记审计）**、导出（异步）、完整性校验入口。可按 `billingOwner` 过滤。
 - **存储页**：正文存储日增量、剩余容量、清理预告（§7.4.6）。
 - **压缩收益页**：压缩前后 token 对比、各阶段贡献、Top 浪费来源、误伤申诉（§6.5.5）。
-- **个人接入治理页**：BYOK 开关、供应商白名单、`auditLevel`、被禁用用户列表（§5.5）。
+- **个人接入治理页**：BYOK 开关、供应商白名单、被禁用用户列表（§5.5）。审计粒度固定，不提供开关。
 - **安全基线页**：展示 §7.7 检查清单结果，未通过项红条常驻。
 - **交互要求**：策略改动有 diff 预览与生效影响面提示；关键操作二次确认并**强制填写变更理由**，全部写审计。
 - **能力自检页**：目录声明 vs 实际连通性与探测结果。
@@ -1249,7 +1255,7 @@ onError: block                # block | allow
 | 我的供应商   | 从 models.dev 目录选供应商 → 填自己的 Key → 测试连通 → 删除；显示是否被企业允许                          |
 | 我的密钥     | 创建/吊销个人虚拟密钥；**一键复制** `base_url` 与各客户端配置片段（环境变量、VS Code、Cursor、Continue） |
 | 我的用量     | 按天/模型/供应商；与"如果走企业账会花多少"的对比（可选）                                                 |
-| 我的调用记录 | 列表 + 详情，字段可见性由 `auditLevel` 决定（§7.8.2）                                                    |
+| 我的调用记录 | 列表 + 详情，本人可见全部字段（§7.8.2）                                                                  |
 | 误报申诉     | 对我被拦截的请求提交申诉                                                                                 |
 | AI Chat      | 复用 §11，数据范围限本人                                                                                 |
 | 我的设置     | 密码、会话、BYOK 开关、数据说明                                                                          |
@@ -1460,63 +1466,61 @@ selected effort → ChatOptions
 - 上游不认 `reasoning_effort` → 走 §10.2 的白名单透传规则，**不发**而不是报错（该字段属可选增强）。
 - 切换后 hint：UI 明确提示"当前轮使用 X 模型，上下文约 N tokens"，避免用户以为全程一个模型。
 
-### 11.4 技术实现（Microsoft Agent Framework）
+### 11.4 技术实现（Microsoft Agent Framework 1.28）
 
 ```csharp
-// 助手自身推理也走网关：OpenAI SDK 指回本机 /v1
-IChatClient chatClient = new OpenAIClient(
-        new ApiKeyCredential(internalKey),
-        new OpenAIClientOptions { Endpoint = new Uri("http://localhost:5080/v1") })
-    .GetChatClient("assistant-default")      // 逻辑名，实际模型由每轮 ChatOptions.ModelId 决定
+// 助手直连供应商（不经网关自身 /v1）：避免为助手再申请虚拟密钥与递归计费
+var rawClient = new OpenAIClient(
+        new ApiKeyCredential(apiKey),
+        new OpenAIClientOptions { Endpoint = new Uri(provider.BaseUrl) })
+    .GetChatClient(offering.UpstreamModel)
     .AsIChatClient();
+
+// 有界工具循环：超过轮数由框架直接终止
+IChatClient chatClient = new FunctionInvokingChatClient(rawClient, loggerFactory)
+{
+    MaximumIterationsPerRequest = Math.Clamp(opts.Assistant.MaxRounds, 1, 12)
+};
 
 AIAgent agent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
 {
-    Instructions = AuditAssistantInstructions,          // 见 11.6
+    Name = "AuditAssistant",
     ChatOptions = new ChatOptions
     {
-        Tools = [ /* 见 11.5 */ ],
+        Instructions = AuditAssistantInstructions,   // 见 §11.6
+        Tools = [ /* 见 §11.5，AIFunctionFactory.Create 闭包注入 userId/ct */ ],
+        Temperature = 0.1f,
     },
 });
 
-// 每轮按用户选择覆盖模型与推理强度
-var runOptions = new ChatClientAgentRunOptions
-{
-    ChatOptions = new ChatOptions
-    {
-        ModelId  = turn.ModelId ?? session.DefaultModel,           // ← 会话内切换
-        Reasoning = new ReasoningOptions { Effort = turn.Effort },  // ← 推理强度
-    },
-    MaximumIterations = 8,                                         // 防止工具循环失控
-};
-
-await foreach (var update in agent.RunStreamingAsync(messages, session, runOptions, ct))
-{
-    yield return update;   // SSE 推给前端
-}
+var response = await agent.RunAsync(question, cancellationToken: ct);
+return new AssistantAnswer(response.Text, evidence, toolCalls, model);
 ```
 
-| 关注点     | 做法                                                                                    |
-| ---------- | --------------------------------------------------------------------------------------- |
-| 模型选择   | 逻辑名 `assistant-default` 仅用于路由兜底；**实际模型取每轮 `ChatOptions.ModelId`**     |
-| 可用模型集 | 只允许「已配置 + 目录存在 + 不违反策略」的模型；后端校验，不信前端                      |
-| 成本归属   | 计入应用标识 `system.assistant`，按**实际模型**与**实际 token** 计量                    |
-| 会话       | `AgentSession` 维持多轮上下文；会话元数据（默认模型、标题）落库，消息默认不落库（可配） |
-| 流式       | `RunStreamingAsync` + SSE                                                               |
-| 封装       | 全部收敛在 `IAuditAssistant` 接口后，SDK 升级只改一处                                   |
-| 版本风险   | `Microsoft.Agents.AI` 迭代快，锁定版本并写集成测试（工具注册 + 换模型 + 一次跑通）      |
+| 关注点     | 做法                                                                                          |
+| ---------- | --------------------------------------------------------------------------------------------- |
+| 版本       | 锁定 `Microsoft.Agents.AI[.OpenAI]` **1.28.0**（GA）；`Microsoft.Extensions.AI` 10.11.0 必须匹配，否则 NU1605 包降级报错 |
+| 模型选择   | 请求可带 `model`（三级 ID 或别名），解析失败则回落到第一个可用 offering                        |
+| 工具轮数   | `FunctionInvokingChatClient.MaximumIterationsPerRequest`（配置 `assistant.maxRounds`，上限 12） |
+| 工具审计   | 每次工具调用写 `assistant_tool_invoked`，`detail` 含工具名与返回长度                            |
+| 工具返回   | 统一截断到 8KB，避免一次追问把大量数据送进第三方模型                                           |
+| 无供应商   | 直接返回「没有可用的模型」，不抛异常、不计费                                                   |
+| 异常       | 上游失败降级为「助手调用失败」，原始异常只进日志                                               |
+| 封装       | 全部收敛在 `AuditAssistant` 单一类内，SDK 升级只改一处                                         |
+| 版本风险   | `Microsoft.Agents.AI` API 仍在演进（如 `Instructions` 从 `ChatClientAgentOptions` 移到 `ChatOptions`），锁版本 + 编译期验证 |
 
 ### 11.5 工具集（只读、白名单、有上限）
 
-| 工具                   | 作用                                   | 关键约束                                                                 |
-| ---------------------- | -------------------------------------- | ------------------------------------------------------------------------ |
-| `search_audit_events`  | 按时间/应用/模型/动作/命中规则检索审计 | 必填时间范围；单次最多 200 行；**默认不返回正文**                        |
-| `read_content`         | 读取单个请求/响应的正文（§7.4.6）      | `redacted` 需开关开启；`raw` 仅 `SecurityAdmin` 且不可批量；单次最多 8KB |
-| `explain_request`      | 单请求全链路（护栏→路由→上游→计量）    | 需权限；默认只给元数据，正文需 `read_content`                            |
-| `get_usage_summary`    | 按维度聚合 token/调用数                | 维度与时间粒度白名单，不接受任意表达式                                   |
-| `get_cost_trend`       | 成本趋势与环比                         | 同上                                                                     |
-| `search_model_catalog` | 查模型能力与价格                       | 只读目录                                                                 |
-| `get_gateway_health`   | 上游健康、错误率、限流状态             | 只读                                                                     |
+**v1 已实现（4 个）**：
+
+| 工具                   | 作用                                   | 关键约束                                                       |
+| ---------------------- | -------------------------------------- | -------------------------------------------------------------- |
+| `search_audit_events`  | 按时间范围/事件类型检索审计事件        | 时间窗 ≤ 30 天；单次最多 200 行；只返回元数据                  |
+| `get_usage_summary`    | 按计费主体/模型聚合 token 与成本       | 时间窗 ≤ 30 天；不接受任意表达式                               |
+| `explain_request`      | 单请求全链路（护栏→路由→上游→计量）    | 按 `requestId` 精确匹配；默认只给元数据，不含正文              |
+| `list_models`          | 列出可用模型与能力/价格                | 只读；最多 100 条                                              |
+
+**规划中（按需再加）**：`read_content`、`get_cost_trend`、`search_model_catalog`、`get_gateway_health`。
 
 > **正文对助手默认关闭**：T10 让正文可查，但不等于应该随手喂给模型。`read_content` 必须由管理员显式开启，且工具层对返回内容做截断与长度上限——否则一次追问就能把大量正文送进第三方模型。
 
@@ -1621,14 +1625,18 @@ await foreach (var update in agent.RunStreamingAsync(messages, session, runOptio
 
 ### 13.1 双 Provider 落地注意
 
-| 关注点   | 做法                                                                             |
-| -------- | -------------------------------------------------------------------------------- |
-| 类型差异 | 避免 PG 专有类型；时间用 `DateTimeOffset`，JSON 用 `TEXT` + 序列化               |
-| 主键     | 统一 `Guid`（应用侧生成），不用自增，便于后续迁移                                |
-| 迁移     | 每 Provider 生成独立 Migrations 程序集；`dotnet ef migrations add -- --provider` |
-| 大小写   | PG 标识符小写，EF 命名策略统一 snake_case 以防歧义                               |
-| 全文检索 | v1 用 `LIKE` + 索引；PG 可后续接 `tsvector`，SQLite 用 FTS5                      |
-| 并发     | 乐观并发用 `RowVersion`；SQLite 侧退化为业务版本号                               |
+| 关注点   | 做法                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------ |
+| 类型差异 | 避免 PG 专有类型；时间用 `DateTimeOffset`，JSON 用 `TEXT` + 序列化                         |
+| 时间存储 | 同一实体两种存储：SQLite 存 Unix 毫秒（`long`），PG 存 `timestamptz`；由 `Database.IsSqlite()` 在 `ConfigureConventions` 里挂 `ValueConverter` |
+| 主键     | 统一 `Guid`（应用侧生成），不用自增，便于后续迁移                                          |
+| 迁移     | **同一个 `DbContext` 基类，两个 Provider 绑定子类**（`SqliteSecureHubDbContext` / `PostgresSecureHubDbContext`），各自一套迁移快照 |
+| 生成命令 | `dotnet ef migrations add X -c SqliteSecureHubDbContext -o Migrations/Sqlite`<br/>`dotnet ef migrations add X -c PostgresSecureHubDbContext -o Migrations/Postgres` |
+| 大小写   | PG 标识符小写，EF 命名策略统一 snake_case 以防歧义                                         |
+| 全文检索 | v1 用 `LIKE` + 索引；PG 可后续接 `tsvector`，SQLite 用 FTS5                                |
+| 并发     | 乐观并发用 `RowVersion`；SQLite 侧退化为业务版本号                                         |
+
+> **迁移文件绝不手改方言。** 需要新方言能力时重新生成对应 Provider 的迁移，而不是直接改 `Migration` 里的 DDL——手改会让快照与代码不一致，下一次 `migrations add` 会生成错误 diff。
 
 > 待细化：关系图与字段级 schema（另起 `docs/design/data-model.md`）。
 
@@ -1697,7 +1705,7 @@ await foreach (var update in agent.RunStreamingAsync(messages, session, runOptio
 | Q13 | 审计锚点是否需导出到外部                          | ✅ 已决：暂不导出（T12）                                         |
 | Q14 | 是否接受正文落盘带来的取证与存储代价              | ✅ 已决：完整审计，正文全落                                      |
 | Q15 | 是否额外留存脱敏**前**原文（`contentRaw`）        | ✅ 已决：保存（T13，见 §14.5）                                   |
-| Q16 | 员工 BYOK 流量的审计粒度默认值                    | ✅ 已决：`full`（§7.8.2，需企业政策配合）                        |
+| Q16 | 员工 BYOK 流量的审计粒度                          | ✅ 已决：固定完整，无档位可配（§7.8.2）                          |
 | Q17 | 是否允许个人接入企业未统一的供应商                | ✅ 已决：允许，受 `allowedProviders` 白名单控制（§5.5）          |
 | Q18 | 同一模型同时有企业分配与个人 BYOK 时用哪个账      | ✅ 已决：靠模型 ID 区分（三级命名），不自动切换（§5.6.3、§10.3） |
 | Q19 | 企业供应商是否默认全员可用                        | ✅ 已决：否，默认按 `Entitlement` 分配（§5.6.1）                 |
@@ -1749,7 +1757,7 @@ TOTP 是基于时间的一次性密码（Authenticator 类应用生成的 6 位�
 | 审计存储膨胀          | 正文双份（脱敏后 + 原文）使数据量增长数倍 | 容量预警 + 阈值停写 + 按应用清理（§7.4.6）      |
 | 管理端只靠密码        | T15 不强制 TOTP，账号被盗即失守           | 强密码 + 失败锁定 + 管理入口仅内网/loopback     |
 | 个人 Key 托管风险     | 员工 Key 存在企业库里，泄露即连带员工账号 | 独立加密 + 属主校验 + 解密计数告警 + 可随时删除 |
-| 审计与隐私冲突        | 员工不愿个人流量被记录                    | `auditLevel` 三档 + 透明告知 + 企业政策沟通     |
+| 审计与隐私冲突        | 员工不愿个人流量被记录                    | 统一完整记录 + 透明告知 + 企业政策沟通         |
 | 收口盲区              | 4G、个人设备、不支持改 endpoint 的 SaaS   | 明确接受 + MDM + 供应商账单对账                 |
 | 个人流量冲击容量      | 全员 BYOK 带来额外负载                    | 个人级 RPM/并发 + 容量规划                      |
 | 同名模型跨版本漂移    | 负载均衡后同名模型输出微差                | 默认只聚合同 canonical 版本；跨版本需显式开启   |

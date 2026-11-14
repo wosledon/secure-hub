@@ -71,17 +71,18 @@ docs/                    PRD 与设计文档
 | TOTP        | 可选启用：`enable` 返回 otpauth URI，`activate` 验证后登录需动态码                               |
 | 审计导出    | 按时间范围流式导出 NDJSON                                                                        |
 | 误报申诉    | 独立追加表记录，不回写审计行                                                                     |
-| 审计助手    | 只读工具 + 最多 6 轮 tool loop；强制证据、工具结果按数据处理、每次调用写审计                      |
-| EF 迁移     | SQLite 初始迁移已生成，`dotnet ef` 设计时工厂按 `SH_MIGRATION_PROVIDER` 选 provider               |
+| 审计助手    | Microsoft Agent Framework 1.28 `ChatClientAgent`，4 个只读工具，工具轮数有上限；强制证据、工具结果按数据处理、每次工具调用写审计 |
+| EF 迁移     | **两个 Provider 各一套迁移**（`Migrations/Sqlite`、`Migrations/Postgres`），同一 `DbContext` 基类 + Provider 绑定子类 |
+| 员工审计    | 员工流量（含 BYOK）**强制记录正文**，与全局 `content.persist` 解耦，不可配降级 |
 
 ## 未实现
 
 | 能力                     | 状态                                                                   |
 | ------------------------ | ---------------------------------------------------------------------- |
-| PostgreSQL 专用迁移      | EF 迁移与 provider 绑定；PG 目前仍走 `EnsureCreated`，切换前需补独立迁移 |
 | 语义缓存 / 语义路由      | 按 PRD 决定不做（T14）                                                 |
 | 内容 `tokenize` 可逆脱敏 | 未实现（当前只有 mask / replace）                                      |
 | 助手多轮会话持久化       | 当前每次请求独立，无 `AgentSession` 概念                               |
+| 助手流式输出             | 当前 `RunAsync` 非流式，前端一次性拿完整回答                           |
 
 ---
 
@@ -126,7 +127,9 @@ dotnet test
 | `Guardrails.OnError`        | `block`（fail-closed）/ `allow`   |
 | `Compression.Enabled`       | 是否启用文本级压缩                |
 | `LoadBalancing.Enabled`     | 是否启用同名模型分流              |
-| `PersonalProviders.*`       | BYOK 开关、供应商白名单、审计粒度 |
+| `PersonalProviders.*`       | BYOK 开关、供应商白名单、禁用用户（审计粒度固定，无开关） |
+| `Assistant.DefaultModel`    | 助手默认模型（三级 ID 或别名）            |
+| `Assistant.MaxRounds`       | 工具调用轮数上限（1–12，默认 6）          |
 
 ---
 
@@ -135,5 +138,12 @@ dotnet test
 - 单机版，**无多租户**；管理入口应只绑内网/loopback（见 PRD §7.7）。
 - 生产环境请在首次登录后删除 `data/initial-admin-password.txt`。
 - 备份 `data/content.key`：丢失后已存正文永久不可解。
-- 生产建议切换 PostgreSQL 并生成迁移；当前 SQLite 使用 `EnsureCreated`，不适合演进式 schema 变更。
+- **数据库迁移**：SQLite 与 PostgreSQL 各有一套独立迁移。首次启动自动 `Migrate()`；新增实体后在仓库根执行：
+
+  ```powershell
+  dotnet ef migrations add <Name> -c SqliteSecureHubDbContext  -o Migrations/Sqlite  -p src/SecureHub.Data
+  dotnet ef migrations add <Name> -c PostgresSecureHubDbContext -o Migrations/Postgres -p src/SecureHub.Data
+  ```
+
+  两个都要生成——只生成一个会让另一侧在启动时因 pending 迁移缺失而建表不全。
 - 网络层拦截不在本产品范围内：由企业 DNS / 内网网关阻断 AI 域名，只放行本服务。

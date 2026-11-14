@@ -106,6 +106,7 @@ app.MapHealthChecks("/healthz");
 
 app.MapDataPlane();
 app.MapManagement();
+app.MapAccountEndpoints();
 app.MapPolicies();
 app.MapAssistant();
 app.MapOrganization();

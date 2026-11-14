@@ -83,6 +83,17 @@ export const api = {
       body: JSON.stringify({ userName, password, totpCode })
     }),
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+  registrationPolicy: () => request<RegistrationPolicy>('/api/auth/registration-policy'),
+  register: (body: { userName: string; password: string; displayName?: string; email?: string }) =>
+    request<{ user: { id: string; user_name: string; display_name?: string; roles: number[]; team_id?: string } }>(
+      '/api/auth/register',
+      { method: 'POST', body: JSON.stringify(body) }
+    ),
+  profile: () => request<Profile>('/api/auth/profile'),
+  updateProfile: (body: { displayName?: string; email?: string }) =>
+    request<Profile>('/api/auth/profile', { method: 'PUT', body: JSON.stringify(body) }),
+  changePassword: (body: { currentPassword: string; newPassword: string }) =>
+    request<{ ok: boolean }>('/api/auth/password', { method: 'POST', body: JSON.stringify(body) }),
   me: () => request<{ user: { id: string; user_name: string; roles: number[]; team_id?: string } }>('/api/auth/me'),
   health: () => request<{ status: string; product: string; version: string }>('/health'),
   enableTotp: () =>
@@ -838,6 +849,24 @@ export interface PersonalOverview {
   }>;
 }
 
+export interface RegistrationPolicy {
+  enabled: boolean;
+  min_password_length: number;
+}
+
+export interface Profile {
+  id: string;
+  user_name: string;
+  display_name: string;
+  email?: string | null;
+  roles: number[];
+  team_id?: string | null;
+  team_name?: string | null;
+  created_at: string;
+  totp_enabled: boolean;
+  session_expires_at: string;
+}
+
 export interface MetricsReport {
   from: string;
   days: number;
@@ -878,7 +907,7 @@ export interface UpdateRuntimeSettingsBody {
 }
 
 export interface SystemSettings {
-  security: { require_https: boolean; session_hours: number; request_body_limit: number; admin_bind_address?: string | null };
+  security: { require_https: boolean; session_hours: number; request_body_limit: number; admin_bind_address?: string | null; allow_self_registration: boolean };
   database: { provider: string; auto_migrate: boolean };
   content: { persist: boolean; raw_days: number; redacted_days: number; compressed_days: number; max_bytes: number };
   guardrails: { on_error: string; redaction_mode: string; token_retention_hours: number };

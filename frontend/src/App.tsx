@@ -44,7 +44,6 @@ import { useTranslation } from 'react-i18next';
 import { api } from './api';
 import { setLanguage } from './i18n';
 import { BrandLockup } from './components/Brand';
-import AccountDialog from './components/AccountDialog';
 import LoginPage from './pages/LoginPage';
 import type { Session } from './types';
 import { ROLE_END_USER } from './types';
@@ -64,6 +63,7 @@ const ObservabilityPage = lazy(() => import('./pages/ObservabilityPage'));
 const SystemPage = lazy(() => import('./pages/SystemPage'));
 const AssistantWorkspace = lazy(() => import('./pages/AssistantWorkspace'));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 
 type NavItem = { path: string; label: string; icon: ReactNode; admin?: boolean };
 
@@ -74,7 +74,6 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
   const [userMenu, setUserMenu] = useState<HTMLElement | null>(null);
   const [health, setHealth] = useState<{ status: string; version: string } | null>(null);
   const [scope, setScope] = useState<'org' | 'personal'>(() =>
@@ -267,7 +266,7 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
           <IconButton sx={{ display: { md: 'none' } }} onClick={() => setMobileOpen(true)} aria-label={t('nav.open')}><MenuIcon /></IconButton>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary" display="block">{isEndUserOnly ? t('nav.personal') : t('app.console')}</Typography>
-            <Typography variant="subtitle1" noWrap>{current?.label ?? t('nav.overview')}</Typography>
+            <Typography variant="subtitle1" noWrap>{location.pathname === '/profile' ? t('nav.profile') : current?.label ?? t('nav.overview')}</Typography>
           </Box>
           <Select
             size="small"
@@ -284,8 +283,8 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
             </IconButton>
           </Tooltip>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 2 }} />
-          <Tooltip title={t('nav.account')}>
-            <IconButton onClick={(event) => setUserMenu(event.currentTarget)} aria-label={t('nav.account')} sx={{ p: 0.5 }}>
+          <Tooltip title={t('nav.profile')}>
+            <IconButton onClick={(event) => setUserMenu(event.currentTarget)} aria-label={t('nav.profile')} sx={{ p: 0.5 }}>
               <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: 13, fontWeight: 700 }}>{session.user_name.slice(0, 1).toUpperCase()}</Avatar>
             </IconButton>
           </Tooltip>
@@ -295,7 +294,7 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
               <Typography variant="caption" color="text.secondary">{session.roles.map((role) => t(`account.role${role}`)).slice(0, 2).join(' · ')}</Typography>
             </Box>
             <Divider />
-            <MenuItem onClick={() => { setUserMenu(null); setAccountOpen(true); }}><ListItemIcon><ManageAccountsIcon fontSize="small" /></ListItemIcon>{t('nav.account')}</MenuItem>
+            <MenuItem onClick={() => { setUserMenu(null); navigate('/profile'); }}><ListItemIcon><ManageAccountsIcon fontSize="small" /></ListItemIcon>{t('nav.profile')}</MenuItem>
             <MenuItem onClick={() => void logout()}><ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>{t('nav.logout')}</MenuItem>
           </Menu>
         </Toolbar>
@@ -328,6 +327,7 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
             <Route path="/workspace/keys" element={<WorkspacePage section="keys" />} />
             <Route path="/workspace/models" element={<WorkspacePage section="models" />} />
             <Route path="/assistant" element={<AssistantWorkspace />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/admin" element={<Navigate to={isEndUserOnly ? '/workspace' : '/overview'} replace />} />
             <Route path="/me" element={<Navigate to="/workspace" replace />} />
             <Route path="*" element={<Navigate to={isEndUserOnly ? '/workspace' : '/overview'} replace />} />
@@ -335,7 +335,6 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
           </Suspense>
         </Box>
       </Box>
-      <AccountDialog session={session} open={accountOpen} onClose={() => setAccountOpen(false)} />
     </Box>
   );
 }

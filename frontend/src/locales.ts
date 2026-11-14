@@ -6,7 +6,7 @@ export const zhCN = {
     keys: '虚拟密钥', policies: '安全策略', budgets: '用量与预算', audit: '审计日志',
     organization: '组织管理', entitlements: '访问授权', observability: '可观测性', system: '系统',
     models: '可用模型', logout: '退出登录', management: '企业管理', personal: '个人空间',
-    account: '账号与安全', main: '主导航', open: '打开导航', close: '关闭导航',
+    account: '账号与安全', main: '主导航', open: '打开导航', close: '关闭导航', profile: '个人信息',
     scopeOrg: '企业管理', scopePersonal: '个人空间',
     groupOverview: '概览', groupAccess: '接入', groupGovern: '治理', groupInsights: '洞察', groupManage: '管理',
     groupMyWork: '我的工作台', groupMyAccess: '接入与密钥', groupShared: '共享与助手',
@@ -18,7 +18,12 @@ export const zhCN = {
     featureOne: '敏感信息识别与实时脱敏', featureTwo: '企业密钥与个人 BYOK 统一治理', featureThree: '链式哈希保护每一条审计记录',
     signInTitle: '欢迎回来', signInSubtitle: '登录 Secure Hub 控制台', userName: '用户名', password: '密码',
     totpCode: '动态验证码', totpHint: '你的账号已启用两步验证，请输入验证器中的 6 位动态码。',
-    submit: '登录控制台', signingIn: '正在登录…', failed: '用户名或密码错误', useTotp: '使用两步验证码', footer: '仅限授权用户访问 · 所有操作将被审计'
+    submit: '登录控制台', signingIn: '正在登录…', failed: '用户名或密码错误', useTotp: '使用两步验证码', footer: '仅限授权用户访问 · 所有操作将被审计',
+    registerTitle: '创建账号', registerSubtitle: '注册后自动进入个人空间，可接入个人供应商、创建密钥并调用已授权模型。',
+    registerSubmit: '创建账号', registering: '正在创建…', noAccount: '还没有账号？', haveAccount: '已有账号？',
+    createAccount: '创建账号', backToLogin: '返回登录', displayName: '显示名称', email: '邮箱',
+    confirmPassword: '确认密码', passwordMismatch: '两次输入的密码不一致', passwordHint: '至少 {{count}} 个字符',
+    registrationDisabled: '管理员未开放自助注册', registrationDisabledHint: '请联系平台管理员为你创建账号。'
   },
   common: {
     create: '新建', save: '保存', cancel: '取消', refresh: '刷新', copy: '复制', copied: '已复制',
@@ -259,6 +264,17 @@ export const zhCN = {
     deleteTitle: '删除这个会话？', deleteHint: '会话历史将永久删除，审计事件本身不受影响。',
     emptySessions: '暂无历史会话', poweredBy: '由网关审计数据驱动'
   },
+  profile: {
+    title: '个人信息', description: '查看账号身份，维护显示名称与邮箱，并管理密码和两步验证。',
+    identity: '账号信息', displayName: '显示名称', email: '邮箱', emailHint: '可选，用于账号识别与通知。', team: '团队',
+    usernameHint: '用户名创建后不可修改', joined: '注册时间', noTeam: '未加入团队', sessionExpires: '当前会话到期',
+    save: '保存个人信息', saved: '个人信息已保存',
+    password: '修改密码', passwordHint: '修改后，其它设备上的会话会自动退出。',
+    currentPassword: '当前密码', newPassword: '新密码', confirmPassword: '确认新密码',
+    changePassword: '更新密码', changed: '密码已更新', passwordMismatch: '两次输入的新密码不一致',
+    passwordTooShort: '新密码至少需要 12 个字符', security: '安全设置',
+    totpEnabled: '已启用两步验证', totpDisabled: '尚未启用两步验证'
+  },
   account: {
     title: '账号与安全', signedInAs: '当前账号', roles: '角色', team: '团队', totp: '两步验证（TOTP）',
     totpHint: '启用后，登录时除密码外还需输入验证器动态码。', enable: '设置两步验证', secret: '密钥',
@@ -282,7 +298,7 @@ export const zhCN = {
     entitlement_updated: '访问授权已更新', entitlement_revoked: '访问授权已删除', key_constraints_updated: '密钥约束已更新',
     system_settings_updated: '运行期配置已更新',
     user_created: '用户已创建', user_updated: '用户已更新', user_deactivated: '用户已停用',
-    user_password_reset: '用户密码已重置', team_created: '团队已创建', team_updated: '团队已更新',
+    user_password_reset: '用户密码已重置', user_password_changed: '密码已修改', team_created: '团队已创建', team_updated: '团队已更新',
     app_created: '应用已创建', app_updated: '应用已更新'
   },
   auditReason: {
@@ -355,6 +371,7 @@ export const zhCN = {
   system: {
     title: '系统', description: '安全基线自检与运行期配置；安全相关设置保存后立即生效。',
     database: '数据库', autoMigrate: '自动迁移：{{value}}', https: 'HTTPS', byok: '个人 BYOK',
+    selfRegistration: '自助注册', selfRegistrationHint: '允许员工在登录页创建账号；生产环境建议关闭',
     byokDetail: '白名单 {{allowed}} · 禁用用户 {{blocked}}', providers: '供应商', providerHint: '已接入供应商总数',
     baseline: '安全基线', baselineHint: '启动后可按需重新检查', healthy: '全部通过', attention: '需要关注',
     checkedAt: '检查时间 {{time}}', effective: '生效配置', contentRetention: '内容留存',
@@ -387,7 +404,7 @@ export const en = {
     keys: 'Virtual keys', policies: 'Security policies', budgets: 'Usage & budgets', audit: 'Audit log',
     organization: 'Organization', entitlements: 'Entitlements', observability: 'Observability', system: 'System',
     models: 'Available models', logout: 'Sign out', management: 'MANAGEMENT', personal: 'PERSONAL',
-    account: 'Account & security', main: 'Main navigation', open: 'Open navigation', close: 'Close navigation',
+    account: 'Account & security', main: 'Main navigation', open: 'Open navigation', close: 'Close navigation', profile: 'Profile',
     scopeOrg: 'Enterprise', scopePersonal: 'Personal',
     groupOverview: 'OVERVIEW', groupAccess: 'ACCESS', groupGovern: 'GOVERNANCE', groupInsights: 'INSIGHTS', groupManage: 'ADMINISTRATION',
     groupMyWork: 'MY WORKSPACE', groupMyAccess: 'ACCESS & KEYS', groupShared: 'SHARED & ASSISTANT',
@@ -399,7 +416,12 @@ export const en = {
     featureOne: 'Detect and redact sensitive data in real time', featureTwo: 'Govern enterprise keys and personal BYOK together', featureThree: 'Protect every audit event with hash chaining',
     signInTitle: 'Welcome back', signInSubtitle: 'Sign in to your Secure Hub console', userName: 'User name', password: 'Password',
     totpCode: 'Authenticator code', totpHint: 'Two-step verification is enabled. Enter the 6-digit code from your authenticator.',
-    submit: 'Sign in to console', signingIn: 'Signing in…', failed: 'Invalid user name or password', useTotp: 'Use an authenticator code', footer: 'Authorized users only · All activity is audited'
+    submit: 'Sign in to console', signingIn: 'Signing in…', failed: 'Invalid user name or password', useTotp: 'Use an authenticator code', footer: 'Authorized users only · All activity is audited',
+    registerTitle: 'Create an account', registerSubtitle: 'After registration you enter your personal workspace to connect a provider, create keys, and call entitled models.',
+    registerSubmit: 'Create account', registering: 'Creating…', noAccount: 'No account yet?', haveAccount: 'Already have an account?',
+    createAccount: 'Create account', backToLogin: 'Back to sign in', displayName: 'Display name', email: 'Email',
+    confirmPassword: 'Confirm password', passwordMismatch: 'Passwords do not match', passwordHint: 'At least {{count}} characters',
+    registrationDisabled: 'Self-registration is disabled', registrationDisabledHint: 'Ask your platform administrator to create an account for you.'
   },
   common: {
     create: 'Create', save: 'Save', cancel: 'Cancel', refresh: 'Refresh', copy: 'Copy', copied: 'Copied',
@@ -640,6 +662,17 @@ export const en = {
     deleteTitle: 'Delete this session?', deleteHint: 'Session history will be permanently deleted. Audit events are not affected.',
     emptySessions: 'No previous sessions', poweredBy: 'Grounded in gateway audit data'
   },
+  profile: {
+    title: 'Profile', description: 'Review your identity, maintain your display name and email, and manage your password and two-step verification.',
+    identity: 'Account', displayName: 'Display name', email: 'Email', emailHint: 'Optional; used for account identification and notifications.', team: 'Team',
+    usernameHint: 'The user name cannot be changed after creation', joined: 'Joined', noTeam: 'No team', sessionExpires: 'Session expires',
+    save: 'Save profile', saved: 'Profile saved',
+    password: 'Change password', passwordHint: 'Other signed-in devices will be signed out after the change.',
+    currentPassword: 'Current password', newPassword: 'New password', confirmPassword: 'Confirm new password',
+    changePassword: 'Update password', changed: 'Password updated', passwordMismatch: 'The new passwords do not match',
+    passwordTooShort: 'The new password must be at least 12 characters', security: 'Security',
+    totpEnabled: 'Two-step verification enabled', totpDisabled: 'Two-step verification not enabled'
+  },
   account: {
     title: 'Account & security', signedInAs: 'Signed in as', roles: 'Roles', team: 'Team', totp: 'Two-step verification (TOTP)',
     totpHint: 'Require an authenticator code in addition to your password when signing in.', enable: 'Set up two-step verification', secret: 'Secret',
@@ -663,7 +696,7 @@ export const en = {
     entitlement_updated: 'Entitlement updated', entitlement_revoked: 'Entitlement removed', key_constraints_updated: 'Key constraints updated',
     system_settings_updated: 'Runtime settings updated',
     user_created: 'User created', user_updated: 'User updated', user_deactivated: 'User deactivated',
-    user_password_reset: 'User password reset', team_created: 'Team created', team_updated: 'Team updated',
+    user_password_reset: 'User password reset', user_password_changed: 'Password changed', team_created: 'Team created', team_updated: 'Team updated',
     app_created: 'Application created', app_updated: 'Application updated'
   },
   auditReason: {
@@ -739,6 +772,7 @@ export const en = {
   system: {
     title: 'System', description: 'Security baseline checks and runtime settings. Security-related changes take effect immediately.',
     database: 'Database', autoMigrate: 'Auto-migrate: {{value}}', https: 'HTTPS', byok: 'Personal BYOK',
+    selfRegistration: 'Self-registration', selfRegistrationHint: 'Allows employees to create an account from the sign-in page; disable in production',
     byokDetail: '{{allowed}} allowlisted · {{blocked}} blocked users', providers: 'Providers', providerHint: 'Connected providers',
     baseline: 'Security baseline', baselineHint: 'Re-run the checks at any time', healthy: 'All checks passed', attention: 'Needs attention',
     checkedAt: 'Checked {{time}}', effective: 'Effective configuration', contentRetention: 'Content retention',

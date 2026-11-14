@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -14,19 +14,44 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import PinOutlinedIcon from '@mui/icons-material/PinOutlined';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, ApiError } from '../api';
+import { api, ApiError, type RegistrationPolicy } from '../api';
 import type { Session } from '../types';
 import { BrandLockup } from '../components/Brand';
 
 export default function LoginPage({ onSuccess }: { onSuccess: (session: Session) => void }) {
   const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const registerMode = location.pathname === '/register';
   const [userName, setUserName] = useState('admin');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [policy, setPolicy] = useState<RegistrationPolicy | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [showTotp, setShowTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.registrationPolicy()
+      .then(setPolicy)
+      .catch(() => setPolicy({ enabled: false, min_password_length: 12 }));
+  }, []);
+
+  useEffect(() => {
+    setError(null);
+    setShowTotp(false);
+    setPassword('');
+    setConfirmPassword('');
+    setTotpCode('');
+    if (registerMode) setUserName('');
+  }, [registerMode]);
+
+  const minimumPassword = policy?.min_password_length ?? 12;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -37,6 +62,36 @@ export default function LoginPage({ onSuccess }: { onSuccess: (session: Session)
       onSuccess(result.user);
     } catch (err) {
       if (err instanceof ApiError && err.code.toLowerCase().includes('totp')) setShowTotp(true);
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitRegister = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+
+    if (password !== confirmPassword) {
+      setError(t('login.passwordMismatch'));
+      return;
+    }
+
+    if (password.length < minimumPassword) {
+      setError(t('login.passwordHint', { count: minimumPassword }));
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const result = await api.register({
+        userName: userName.trim(),
+        password,
+        displayName: displayName.trim() || undefined,
+        email: email.trim() || undefined
+      });
+      onSuccess(result.user);
+    } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
       setBusy(false);
@@ -82,53 +137,122 @@ export default function LoginPage({ onSuccess }: { onSuccess: (session: Session)
         <Box sx={{ display: { lg: 'none' }, p: 3 }}><BrandLockup /></Box>
         <Box sx={{ flex: 1, display: 'grid', placeItems: 'center', p: { xs: 3, sm: 6 } }}>
           <Box sx={{ width: '100%', maxWidth: 400 }}>
-            <Box component="form" onSubmit={submit} noValidate>
-              <Typography variant="h1" component="h1">{t('login.signInTitle')}</Typography>
-              <Typography variant="body1" color="text.secondary" mt={1} mb={4}>{t('login.signInSubtitle')}</Typography>
-              <Stack spacing={2.25}>
-                <TextField
-                  fullWidth
-                  label={t('login.userName')}
-                  name="username"
-                  value={userName}
-                  onChange={(event) => setUserName(event.target.value)}
-                  autoComplete="username"
-                  spellCheck={false}
-                  slotProps={{ input: { startAdornment: <InputAdornment position="start"><PersonOutlineIcon fontSize="small" /></InputAdornment> } }}
-                />
-                <TextField
-                  fullWidth
-                  label={t('login.password')}
-                  name="password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="current-password"
-                  autoFocus
-                  slotProps={{ input: { startAdornment: <InputAdornment position="start"><LockOutlinedIcon fontSize="small" /></InputAdornment> } }}
-                />
-                {!showTotp && (
-                  <Button size="small" onClick={() => setShowTotp(true)} sx={{ alignSelf: 'flex-start', px: 0 }}>{t('login.useTotp')}</Button>
-                )}
-                {showTotp && (
-                  <Box>
-                    <Alert severity="info" sx={{ mb: 2 }}>{t('login.totpHint')}</Alert>
+            <Box component="form" onSubmit={registerMode ? submitRegister : submit} noValidate>
+              <Typography variant="h1" component="h1">{registerMode ? t('login.registerTitle') : t('login.signInTitle')}</Typography>
+              <Typography variant="body1" color="text.secondary" mt={1} mb={4}>{registerMode ? t('login.registerSubtitle') : t('login.signInSubtitle')}</Typography>
+
+              {registerMode && policy && !policy.enabled ? (
+                <Stack spacing={2}>
+                  <Alert severity="info">
+                    <Typography variant="subtitle2" mb={0.5}>{t('login.registrationDisabled')}</Typography>
+                    {t('login.registrationDisabledHint')}
+                  </Alert>
+                  <Button variant="outlined" onClick={() => navigate('/login')}>{t('login.backToLogin')}</Button>
+                </Stack>
+              ) : (
+                <Stack spacing={2.25}>
+                  {registerMode && (
                     <TextField
                       fullWidth
-                      label={t('login.totpCode')}
-                      name="totpCode"
-                      value={totpCode}
-                      onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                      inputProps={{ inputMode: 'numeric', autoComplete: 'one-time-code', pattern: '[0-9]*' }}
-                      slotProps={{ input: { startAdornment: <InputAdornment position="start"><PinOutlinedIcon fontSize="small" /></InputAdornment> } }}
+                      label={t('login.displayName')}
+                      name="displayName"
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                      autoComplete="name"
+                      helperText={t('common.optional')}
+                      slotProps={{ input: { startAdornment: <InputAdornment position="start"><PersonOutlineIcon fontSize="small" /></InputAdornment> } }}
                     />
-                  </Box>
-                )}
-                {error && <Alert severity="error" aria-live="polite">{error || t('login.failed')}</Alert>}
-                <Button type="submit" variant="contained" size="large" endIcon={<ArrowForwardIcon />} disabled={busy || !userName || !password || (showTotp && totpCode.length !== 6)} sx={{ minHeight: 46 }}>
-                  {busy ? t('login.signingIn') : t('login.submit')}
+                  )}
+                  {registerMode && (
+                    <TextField
+                      fullWidth
+                      label={t('login.email')}
+                      name="email"
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      autoComplete="email"
+                      helperText={t('common.optional')}
+                    />
+                  )}
+                  <TextField
+                    fullWidth
+                    label={t('login.userName')}
+                    name="username"
+                    value={userName}
+                    onChange={(event) => setUserName(event.target.value)}
+                    autoComplete="username"
+                    spellCheck={false}
+                    slotProps={{ input: { startAdornment: <InputAdornment position="start"><PersonOutlineIcon fontSize="small" /></InputAdornment> } }}
+                  />
+                  <TextField
+                    fullWidth
+                    label={t('login.password')}
+                    name="password"
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    autoComplete={registerMode ? 'new-password' : 'current-password'}
+                    autoFocus={!registerMode}
+                    helperText={registerMode ? t('login.passwordHint', { count: minimumPassword }) : undefined}
+                    slotProps={{ input: { startAdornment: <InputAdornment position="start"><LockOutlinedIcon fontSize="small" /></InputAdornment> } }}
+                  />
+                  {registerMode && (
+                    <TextField
+                      fullWidth
+                      label={t('login.confirmPassword')}
+                      name="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      autoComplete="new-password"
+                      error={!!confirmPassword && password !== confirmPassword}
+                      helperText={confirmPassword && password !== confirmPassword ? t('login.passwordMismatch') : undefined}
+                      slotProps={{ input: { startAdornment: <InputAdornment position="start"><LockOutlinedIcon fontSize="small" /></InputAdornment> } }}
+                    />
+                  )}
+                  {!registerMode && !showTotp && (
+                    <Button size="small" onClick={() => setShowTotp(true)} sx={{ alignSelf: 'flex-start', px: 0 }}>{t('login.useTotp')}</Button>
+                  )}
+                  {!registerMode && showTotp && (
+                    <Box>
+                      <Alert severity="info" sx={{ mb: 2 }}>{t('login.totpHint')}</Alert>
+                      <TextField
+                        fullWidth
+                        label={t('login.totpCode')}
+                        name="totpCode"
+                        value={totpCode}
+                        onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                        inputProps={{ inputMode: 'numeric', autoComplete: 'one-time-code', pattern: '[0-9]*' }}
+                        slotProps={{ input: { startAdornment: <InputAdornment position="start"><PinOutlinedIcon fontSize="small" /></InputAdornment> } }}
+                      />
+                    </Box>
+                  )}
+                  {error && <Alert severity="error" aria-live="polite">{error || t('login.failed')}</Alert>}
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    size="large"
+                    endIcon={<ArrowForwardIcon />}
+                    disabled={busy ||
+                      (registerMode
+                        ? !userName.trim() || !password || !confirmPassword || password !== confirmPassword || policy?.enabled === false
+                        : !userName || !password || (showTotp && totpCode.length !== 6))}
+                    sx={{ minHeight: 46 }}
+                  >
+                    {busy
+                      ? t(registerMode ? 'login.registering' : 'login.signingIn')
+                      : t(registerMode ? 'login.registerSubmit' : 'login.submit')}
+                  </Button>
+                </Stack>
+              )}
+
+              <Typography variant="body2" color="text.secondary" textAlign="center" mt={2.5}>
+                {registerMode ? t('login.haveAccount') : t('login.noAccount')}{' '}
+                <Button size="small" onClick={() => navigate(registerMode ? '/login' : '/register')}>
+                  {registerMode ? t('login.backToLogin') : t('login.createAccount')}
                 </Button>
-              </Stack>
+              </Typography>
             </Box>
             <Divider sx={{ my: 4 }} />
             <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">

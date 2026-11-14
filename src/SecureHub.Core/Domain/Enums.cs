@@ -158,6 +158,7 @@ public static class AuditEventTypes
     public const string UserUpdated = "user_updated";
     public const string UserDeactivated = "user_deactivated";
     public const string UserPasswordReset = "user_password_reset";
+    public const string UserPasswordChanged = "user_password_changed";
     public const string TeamCreated = "team_created";
     public const string TeamUpdated = "team_updated";
     public const string AppCreated = "app_created";

@@ -113,6 +113,7 @@ public static class SystemEndpoints
             {
                 require_https = settings.Security.RequireHttps,
                 session_hours = settings.Security.SessionAbsoluteHours,
+                allow_self_registration = settings.Security.AllowSelfRegistration,
                 request_body_limit = settings.Security.RequestBodyLimitBytes,
                 admin_bind_address = settings.Security.AdminBindAddress
             },

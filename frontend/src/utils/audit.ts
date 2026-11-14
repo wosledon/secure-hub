@@ -8,7 +8,7 @@ export const auditEventTypes = [
   'content_viewed', 'content_write_failed', 'data_exported', 'provider_created',
   'provider_credential_updated', 'catalog_synced', 'byok_enabled', 'assistant_tool_invoked',
   'assistant_session_started', 'assistant_answer_returned', 'content_restored', 'security_baseline_failed',
-  'user_created', 'user_updated', 'user_deactivated', 'user_password_reset',
+  'user_created', 'user_updated', 'user_deactivated', 'user_password_reset', 'user_password_changed',
   'team_created', 'team_updated', 'app_created', 'app_updated',
   'content_purged', 'rate_limited', 'provider_updated', 'provider_disabled', 'provider_tested',
   'provider_credential_rotated', 'entitlement_updated', 'entitlement_revoked', 'key_constraints_updated', 'system_settings_updated'

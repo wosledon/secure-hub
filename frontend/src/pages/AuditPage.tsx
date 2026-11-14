@@ -199,7 +199,7 @@ export default function AuditPage() {
         <Stack direction="row" justifyContent="space-between" alignItems="center" px={2.5} py={1.5}><Typography variant="body2" color="text.secondary">{t('common.results', { count: rows.length })}</Typography><Typography variant="caption" color="text.secondary">{t('audit.exportHint')}</Typography></Stack>
         {loading ? <TableSkeleton rows={8} columns={7} /> : rows.length === 0 ? <EmptyState title={t('audit.empty')} description={t('audit.emptyHint')} /> : (
           <Box sx={{ overflowX: 'auto' }}><Table size="small">
-            <TableHead><TableRow><TableCell>#</TableCell><TableCell>{t('audit.time')}</TableCell><TableCell>{t('audit.event')}</TableCell><TableCell>{t('audit.action')}</TableCell><TableCell>{t('audit.actor')}</TableCell><TableCell>{t('audit.model')}</TableCell><TableCell align="right">{t('audit.tokensInOut')}</TableCell><TableCell>{t('table.billing')}</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>#</TableCell><TableCell>{t('audit.time')}</TableCell><TableCell>{t('audit.event')}</TableCell><TableCell>{t('audit.action')}</TableCell><TableCell>{t('audit.actor')}</TableCell><TableCell>{t('audit.model')}</TableCell><TableCell align="right">{t('audit.tokensInOut')}</TableCell><TableCell>{t('table.billing')}</TableCell><TableCell align="right">{t('common.actions')}</TableCell></TableRow></TableHead>
             <TableBody>{visible.map((row) => (
               <TableRow key={row.eventId} hover onClick={() => openDetails(row)} sx={{ cursor: 'pointer' }} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetails(row); } }}>
                 <TableCell sx={{ fontVariantNumeric: 'tabular-nums' }}>{row.sequence}</TableCell><TableCell sx={{ whiteSpace: 'nowrap' }}>{format.dateTime(row.occurredAt)}</TableCell>
@@ -212,6 +212,21 @@ export default function AuditPage() {
                 <TableCell sx={{ maxWidth: 220 }}><Box component="code" sx={{ fontSize: 11, wordBreak: 'break-all' }}>{row.modelAlias ?? '—'}</Box></TableCell>
                 <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>{row.inputTokens != null || row.outputTokens != null ? `${format.number(row.inputTokens ?? 0)} / ${format.number(row.outputTokens ?? 0)}` : '—'}</TableCell>
                 <TableCell><StatusChip status={row.billing_owner} label={labels.billing(row.billing_owner)} /></TableCell>
+                <TableCell align="right" padding="none" sx={{ pr: 1 }}>
+                  <Tooltip title={t('audit.dispute')}>
+                    <IconButton
+                      size="small"
+                      aria-label={`${t('audit.dispute')} #${row.sequence}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openDetails(row);
+                        setDisputeOpen(true);
+                      }}
+                    >
+                      <FlagOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             ))}</TableBody>
           </Table></Box>
@@ -221,7 +236,13 @@ export default function AuditPage() {
 
       <Drawer anchor="right" open={!!selected} onClose={closeDetails} sx={{ '& .MuiDrawer-paper': { width: { xs: '100%', sm: 500 } } }}>
         {selected && <Box sx={{ height: '100%', overflowY: 'auto' }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" p={2.5}><Box><Typography variant="overline" color="primary.main">#{selected.sequence}</Typography><Typography variant="h2">{t('audit.details')}</Typography></Box><IconButton onClick={closeDetails} aria-label={t('common.close')}><CloseIcon /></IconButton></Stack><Divider />
+          <Stack direction="row" alignItems="center" justifyContent="space-between" p={2.5}>
+            <Box><Typography variant="overline" color="primary.main">#{selected.sequence}</Typography><Typography variant="h2">{t('audit.details')}</Typography></Box>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button size="small" variant="outlined" color="warning" startIcon={<FlagOutlinedIcon />} onClick={() => setDisputeOpen(true)}>{t('audit.dispute')}</Button>
+              <IconButton onClick={closeDetails} aria-label={t('common.close')}><CloseIcon /></IconButton>
+            </Stack>
+          </Stack><Divider />
           <Stack spacing={2.5} p={2.5}>
             <Box>
               <Typography variant="h2" sx={{ wordBreak: 'break-word' }}>{labels.event(selected.eventType)}</Typography>
@@ -263,7 +284,6 @@ export default function AuditPage() {
             {selected.requestId && (
               <Button variant="outlined" startIcon={<SearchIcon />} onClick={() => void openTrace(selected.requestId!)}>{t('audit.trace')}</Button>
             )}
-            <Button variant="outlined" color="warning" startIcon={<FlagOutlinedIcon />} onClick={() => setDisputeOpen(true)}>{t('audit.dispute')}</Button>
           </Stack>
         </Box>}
       </Drawer>

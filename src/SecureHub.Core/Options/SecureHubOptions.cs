@@ -33,6 +33,7 @@ public sealed class SecurityOptions
     public int LoginLockoutFailures { get; set; } = 5;
     public int LoginLockoutMinutes { get; set; } = 5;
     public bool TotpRequired { get; set; }
+    public bool AllowSelfRegistration { get; set; }
     public string DataDirectory { get; set; } = "./data";
     public int RequestBodyLimitBytes { get; set; } = 1_048_576;
 }

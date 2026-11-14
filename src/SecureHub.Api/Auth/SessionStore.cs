@@ -66,6 +66,19 @@ public sealed class SessionStore(IOptions<SecureHubOptions> options)
             if (pair.Value.UserId == userId) _sessions.TryRemove(pair.Key, out _);
         }
     }
+
+    /// <summary>密码变更后撤销该用户的其它会话，保留当前会话。</summary>
+    public void RemoveAllForUserExcept(Guid userId, string? keepToken)
+    {
+        foreach (var pair in _sessions)
+        {
+            if (pair.Value.UserId == userId &&
+                !string.Equals(pair.Key, keepToken, StringComparison.Ordinal))
+            {
+                _sessions.TryRemove(pair.Key, out _);
+            }
+        }
+    }
 }
 
 public static class SessionCookie

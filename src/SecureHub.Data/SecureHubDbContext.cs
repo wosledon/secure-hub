@@ -77,6 +77,8 @@ public class SecureHubDbContext : DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.UserName).HasMaxLength(100).IsRequired();
             e.HasIndex(x => x.UserName).IsUnique();
+            e.Property(x => x.DisplayName).HasMaxLength(100);
+            e.Property(x => x.Email).HasMaxLength(200);
             e.Property(x => x.PasswordHash).IsRequired();
             e.Ignore(x => x.Roles);
         });

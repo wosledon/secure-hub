@@ -145,6 +145,16 @@ export const api = {
     return `/api/admin/audit/export${query ? `?${query}` : ''}`;
   },
   disputes: () => request<AuditDisputeRow[]>('/api/admin/audit/disputes'),
+  auditEventDetail: (eventId: string) => request<AuditEventDetail>(`/api/admin/audit/${eventId}`),
+  auditRequestTrace: (requestId: string) => request<AuditRequestTrace>(`/api/admin/audit/request/${encodeURIComponent(requestId)}`),
+  auditContent: (contentId: string) => request<AuditContentResponse>(`/api/admin/audit/content/${contentId}`),
+  purgeRetention: () =>
+    request<{ ok: boolean; content_blobs: number; redaction_tokens: number; bytes: number }>(
+      '/api/admin/audit/retention/purge',
+      { method: 'POST' }
+    ),
+  usageBreakdown: (days = 7) => request<UsageBreakdown>(`/api/admin/usage/breakdown?days=${days}`),
+  capacity: () => request<CapacityReport>('/api/admin/capacity'),
   disputeAudit: (eventId: string, body: { disputeType: string; note?: string }) =>
     request<{ ok: boolean }>(`/api/admin/audit/${eventId}/dispute`, {
       method: 'POST',
@@ -651,6 +661,92 @@ export interface OrgUserRow {
   is_active: boolean;
   createdAt: string;
   totp_enabled: boolean;
+}
+
+export interface AuditContentRef {
+  content_id: string;
+  direction: string;
+  variant: string;
+  size_bytes: number;
+  truncated: boolean;
+  created_at: string;
+  expires_at: string;
+  expired?: boolean;
+}
+
+export interface AuditEventDetail {
+  event: AuditRow & { teamId?: string | null; detail?: string | null; policy_id?: string | null; policy_version?: number | null; upstreamModel?: string | null; providerId?: string | null };
+  disputes: AuditDisputeRow[];
+  content: AuditContentRef[];
+}
+
+export interface AuditRequestTrace {
+  request_id: string;
+  events: AuditRow[];
+  content: AuditContentRef[];
+}
+
+export interface AuditContentResponse {
+  content_id: string;
+  request_id: string;
+  direction: string;
+  variant: string;
+  text: string;
+  truncated: boolean;
+  size_bytes: number;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface UsageBreakdownRow {
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  name?: string;
+  date?: string;
+  model?: string;
+  compression_saved_tokens?: number;
+}
+
+export interface UsageBreakdown {
+  from: string;
+  days: number;
+  totals: {
+    requests: number;
+    input_tokens: number;
+    input_tokens_original: number;
+    output_tokens: number;
+    cost_usd: number;
+    compression_saved_tokens: number;
+    org_requests: number;
+    user_requests: number;
+  };
+  by_day: UsageBreakdownRow[];
+  by_team: UsageBreakdownRow[];
+  by_app: UsageBreakdownRow[];
+  by_provider: UsageBreakdownRow[];
+  by_model: UsageBreakdownRow[];
+}
+
+export interface CapacityReport {
+  retention: {
+    raw_days: number;
+    redacted_days: number;
+    compressed_days: number;
+    max_content_bytes: number;
+    persist_content: boolean;
+  };
+  content: {
+    blobs: number;
+    bytes: number;
+    expired_blobs: number;
+    expired_bytes: number;
+    by_variant: Array<{ variant: string; blobs: number; bytes: number }>;
+    by_direction: Array<{ direction: string; blobs: number; bytes: number }>;
+  };
+  keys: { total: number; active: number; revoked: number; expired: number };
+  redaction_tokens: { total: number; expired: number };
 }
 
 export interface PolicyRow {

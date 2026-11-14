@@ -67,6 +67,9 @@ public class RbacTests
     [InlineData(UserRole.Auditor, Permission.SecurityWrite, false)]
     [InlineData(UserRole.EndUser, Permission.AssistantUse, true)]
     [InlineData(UserRole.EndUser, Permission.ProviderWrite, false)]
+    [InlineData(UserRole.SecurityAdmin, Permission.ContentRead, true)]
+    [InlineData(UserRole.Auditor, Permission.ContentRead, false)]
+    [InlineData(UserRole.TeamOwner, Permission.ContentRead, false)]
     public void Matrix_matches_spec(UserRole role, Permission permission, bool expected)
     {
         Assert.Equal(expected, Rbac.Allows(role, permission));

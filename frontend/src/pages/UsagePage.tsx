@@ -15,11 +15,13 @@ import {
   MenuItem,
   Stack,
   Switch,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography
@@ -34,7 +36,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import TokenOutlinedIcon from '@mui/icons-material/TokenOutlined';
 import IconButton from '@mui/material/IconButton';
 import { useTranslation } from 'react-i18next';
-import { api, type BudgetRow, type UsageRow } from '../api';
+import { api, type BudgetRow, type CapacityReport, type UsageBreakdown, type UsageBreakdownRow, type UsageRow } from '../api';
 import { EmptyState, ErrorState, PageHeader, StatCard, StatusChip, TableSkeleton } from '../components/ui';
 import { useFormatters } from '../utils/format';
 
@@ -46,6 +48,9 @@ export default function UsagePage() {
   const format = useFormatters();
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [budgets, setBudgets] = useState<BudgetRow[]>([]);
+  const [breakdown, setBreakdown] = useState<UsageBreakdown | null>(null);
+  const [capacity, setCapacity] = useState<CapacityReport | null>(null);
+  const [breakdownTab, setBreakdownTab] = useState<'day' | 'team' | 'app' | 'provider' | 'model'>('day');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -58,9 +63,13 @@ export default function UsagePage() {
     setLoading(true);
     setError(null);
     try {
-      const [usageResult, budgetRows] = await Promise.all([api.adminUsage(), api.budgets()]);
+      const [usageResult, budgetRows, breakdownResult, capacityResult] = await Promise.all([
+        api.adminUsage(), api.budgets(), api.usageBreakdown(7), api.capacity()
+      ]);
       setUsage(usageResult.data);
       setBudgets(budgetRows);
+      setBreakdown(breakdownResult);
+      setCapacity(capacityResult);
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -125,6 +134,55 @@ export default function UsagePage() {
         <StatCard label={t('usage.totalCost')} value={loading ? '—' : format.currency(metrics.cost)} caption="USD" icon={<CurrencyExchangeIcon fontSize="small" />} tone="success" />
         <StatCard label={t('usage.personalRequests')} value={loading ? '—' : format.number(metrics.personal)} caption={t('me.billingUser')} icon={<PersonOutlineIcon fontSize="small" />} tone="warning" />
       </Box>
+
+      <Card>
+        <CardContent sx={{ pb: '16px !important' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'flex-start' }} spacing={2}>
+            <Box><Typography variant="h2">{t('usage.breakdown')}</Typography><Typography variant="body2" color="text.secondary" mt={0.5}>{t('usage.breakdownHint')}</Typography></Box>
+            <Chip size="small" color="success" variant="outlined" label={t('usage.compressionSaved', { tokens: format.compact(breakdown?.totals.compression_saved_tokens ?? 0) })} />
+          </Stack>
+          <Tabs value={breakdownTab} onChange={(_, value) => setBreakdownTab(value)} sx={{ mt: 2, borderBottom: 1, borderColor: 'divider' }} variant="scrollable">
+            <Tab value="day" label={t('usage.byDay')} /><Tab value="team" label={t('usage.byTeam')} /><Tab value="app" label={t('usage.byApp')} /><Tab value="provider" label={t('usage.byProvider')} /><Tab value="model" label={t('usage.byModel')} />
+          </Tabs>
+        </CardContent>
+        {loading ? <TableSkeleton rows={4} columns={5} /> : (
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead><TableRow><TableCell>{breakdownTab === 'day' ? t('audit.time') : breakdownTab === 'model' ? t('audit.model') : t('common.name')}</TableCell><TableCell align="right">{t('usage.requests')}</TableCell><TableCell align="right">{t('usage.input')}</TableCell><TableCell align="right">{t('usage.output')}</TableCell><TableCell align="right">{t('usage.cost')}</TableCell></TableRow></TableHead>
+              <TableBody>
+                {(breakdownTab === 'day' ? breakdown?.by_day : breakdownTab === 'team' ? breakdown?.by_team : breakdownTab === 'app' ? breakdown?.by_app : breakdownTab === 'provider' ? breakdown?.by_provider : breakdown?.by_model)?.map((row: UsageBreakdownRow, index) => (
+                  <TableRow key={`${breakdownTab}-${index}`} hover>
+                    <TableCell>{row.date ?? row.name ?? row.model ?? '—'}</TableCell>
+                    <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>{format.number(row.requests)}</TableCell>
+                    <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>{format.number(row.input_tokens)}</TableCell>
+                    <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>{format.number(row.output_tokens)}</TableCell>
+                    <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>{format.currency(row.cost_usd)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
+        )}
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h2">{t('usage.capacity')}</Typography>
+          <Typography variant="body2" color="text.secondary" mt={0.5}>{t('usage.capacityHint')}</Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2, mt: 2 }}>
+            <Box><Typography variant="caption" color="text.secondary">{t('usage.contentBlobs')}</Typography><Typography variant="h3">{format.number(capacity?.content.blobs ?? 0)}</Typography></Box>
+            <Box><Typography variant="caption" color="text.secondary">{t('usage.contentBytes')}</Typography><Typography variant="h3">{format.compact(capacity?.content.bytes ?? 0)} B</Typography></Box>
+            <Box><Typography variant="caption" color="text.secondary">{t('usage.expiredContent')}</Typography><Typography variant="h3">{format.number(capacity?.content.expired_blobs ?? 0)}</Typography></Box>
+            <Box><Typography variant="caption" color="text.secondary">{t('usage.activeKeys')}</Typography><Typography variant="h3">{format.number(capacity?.keys.active ?? 0)}</Typography></Box>
+          </Box>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap mt={2}>
+            <Chip size="small" variant="outlined" label={t('usage.retentionRaw', { days: capacity?.retention.raw_days ?? 0 })} />
+            <Chip size="small" variant="outlined" label={t('usage.retentionRedacted', { days: capacity?.retention.redacted_days ?? 0 })} />
+            <Chip size="small" variant="outlined" label={t('usage.retentionCompressed', { days: capacity?.retention.compressed_days ?? 0 })} />
+            <Chip size="small" variant="outlined" label={t('usage.expiringTokens', { count: capacity?.redaction_tokens.expired ?? 0 })} />
+          </Stack>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent sx={{ pb: '16px !important' }}><Typography variant="h2">{t('usage.usageByModel')}</Typography><Typography variant="body2" color="text.secondary" mt={0.5}>{t('usage.usageHint')}</Typography></CardContent>

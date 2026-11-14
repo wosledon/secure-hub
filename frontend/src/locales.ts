@@ -100,7 +100,14 @@ export const zhCN = {
     cost: '成本', billingOwner: '计费归属', budgets: '预算与配额', budgetsHint: '达到上限后，后续请求会被拒绝并记录审计。',
     addBudget: '设置预算', subject: '预算主体', period: '周期', tokenLimit: 'Token 上限', costLimit: '成本上限（USD）',
     day: '每日', week: '每周', month: '每月', used: '已使用', remaining: '剩余', unlimited: '未设上限',
-    saved: '预算已保存', org: '整个组织', team: '团队', app: '应用', subjectIdHint: '团队或应用预算需要填写对应 ID；组织预算留空。'
+    saved: '预算已保存', org: '整个组织', team: '团队', app: '应用', subjectIdHint: '团队或应用预算需要填写对应 ID；组织预算留空。',
+    breakdown: '成本拆分', breakdownHint: '近 7 天按天、团队、应用、供应商和模型拆分',
+    compressionSaved: '压缩节省 {{tokens}} Token',
+    byDay: '按天', byTeam: '按团队', byApp: '按应用', byProvider: '按供应商', byModel: '按模型',
+    capacity: '容量与留存', capacityHint: '内容存储、密钥与脱敏令牌占用；过期内容可在审计页清理。',
+    contentBlobs: '正文条目', contentBytes: '正文体积', expiredContent: '已过期正文', activeKeys: '有效密钥',
+    retentionRaw: '原文 {{days}} 天', retentionRedacted: '脱敏后 {{days}} 天', retentionCompressed: '压缩后 {{days}} 天',
+    expiringTokens: '过期脱敏令牌 {{count}}'
   },
   audit: {
     title: '审计日志', description: '检索不可篡改的治理事件，核验证据链、导出合规记录并处理误报申诉。',
@@ -113,6 +120,13 @@ export const zhCN = {
     dispute: '发起误报申诉', disputeType: '申诉类型', disputeNote: '补充说明', disputeHint: '申诉会独立追加记录，不会修改原审计事件。',
     disputeSubmitted: '申诉已提交', falsePositive: '误报', other: '其他', exportHint: '按当前日期范围导出，最多 10,000 条。',
     chainOk: '审计链完整，已校验 {{count}} 条', chainBroken: '审计链在序号 {{seq}} 处断裂',
+    purge: '清理过期内容', purgeTitle: '清理已过期内容？', purgeHint: '只删除超过留存期的审计正文与脱敏令牌，不删除审计事件本身。',
+    purged: '已清理 {{blobs}} 条正文、{{tokens}} 条脱敏令牌',
+    contentSection: '关联正文', noContent: '该请求没有留存正文（可能未开启留存或已过期）。',
+    viewContent: '查看正文', expired: '已过期', contentTitle: '正文 · {{direction}} / {{variant}}',
+    contentWarning: '正文属于高敏感数据，本次查看会写入审计事件。',
+    truncated: '已截断', trace: '查看调用链', traceTitle: '调用链 · {{id}}', traceHint: '共 {{count}} 条审计事件',
+    traceContent: '关联 {{count}} 个正文变体',
     empty: '没有匹配的审计事件', emptyHint: '调整筛选条件或时间范围后重试。', disputeList: '误报申诉记录',
     disputeListHint: '申诉独立存储，保留原始审计证据。', resolved: '已解决', unresolved: '待处理', noDisputes: '暂无申诉记录'
   },
@@ -158,6 +172,9 @@ export const zhCN = {
     byok_enabled: '个人供应商已接入', assistant_tool_invoked: '助手只读工具已调用',
     assistant_session_started: '助手会话已创建', assistant_answer_returned: '助手回答已返回',
     content_restored: '脱敏内容已还原', security_baseline_failed: '安全基线检查失败',
+    content_purged: '过期审计内容已清理', rate_limited: '请求被限流', provider_updated: '供应商已更新',
+    provider_disabled: '供应商已停用', provider_tested: '供应商连通性已检测', provider_credential_rotated: '供应商凭据已轮换',
+    entitlement_updated: '访问授权已更新', entitlement_revoked: '访问授权已删除', key_constraints_updated: '密钥约束已更新',
     user_created: '用户已创建', user_updated: '用户已更新', user_deactivated: '用户已停用',
     user_password_reset: '用户密码已重置', team_created: '团队已创建', team_updated: '团队已更新',
     app_created: '应用已创建', app_updated: '应用已更新'
@@ -331,7 +348,14 @@ export const en = {
     cost: 'Cost', billingOwner: 'Billing owner', budgets: 'Budgets & quotas', budgetsHint: 'Requests beyond a limit are rejected and audited.',
     addBudget: 'Set budget', subject: 'Budget subject', period: 'Period', tokenLimit: 'Token limit', costLimit: 'Cost limit (USD)',
     day: 'Daily', week: 'Weekly', month: 'Monthly', used: 'Used', remaining: 'Remaining', unlimited: 'No limit',
-    saved: 'Budget saved', org: 'Entire organization', team: 'Team', app: 'Application', subjectIdHint: 'Required for team or app budgets; leave empty for organization budgets.'
+    saved: 'Budget saved', org: 'Entire organization', team: 'Team', app: 'Application', subjectIdHint: 'Required for team or app budgets; leave empty for organization budgets.',
+    breakdown: 'Cost breakdown', breakdownHint: 'Last 7 days by day, team, application, provider, and model',
+    compressionSaved: '{{tokens}} tokens saved by compression',
+    byDay: 'By day', byTeam: 'By team', byApp: 'By app', byProvider: 'By provider', byModel: 'By model',
+    capacity: 'Capacity & retention', capacityHint: 'Content storage, keys, and redaction tokens. Expired content can be purged on the audit page.',
+    contentBlobs: 'Content blobs', contentBytes: 'Content size', expiredContent: 'Expired blobs', activeKeys: 'Active keys',
+    retentionRaw: 'Raw {{days}}d', retentionRedacted: 'Redacted {{days}}d', retentionCompressed: 'Compressed {{days}}d',
+    expiringTokens: 'Expired redaction tokens {{count}}'
   },
   audit: {
     title: 'Audit log', description: 'Search immutable governance events, verify the evidence chain, export compliance records, and handle disputes.',
@@ -344,6 +368,13 @@ export const en = {
     dispute: 'Report false positive', disputeType: 'Dispute type', disputeNote: 'Additional context', disputeHint: 'A dispute is appended separately and never changes the original audit event.',
     disputeSubmitted: 'Dispute submitted', falsePositive: 'False positive', other: 'Other', exportHint: 'Exports the selected date range, up to 10,000 events.',
     chainOk: 'Audit chain intact. {{count}} events verified.', chainBroken: 'Audit chain broken at sequence {{seq}}',
+    purge: 'Purge expired content', purgeTitle: 'Purge expired content?', purgeHint: 'Only audit content past its retention window and redaction tokens are deleted. Audit events remain.',
+    purged: 'Purged {{blobs}} content blobs and {{tokens}} redaction tokens',
+    contentSection: 'Related content', noContent: 'No content was retained for this request (retention disabled or expired).',
+    viewContent: 'View content', expired: 'Expired', contentTitle: 'Content · {{direction}} / {{variant}}',
+    contentWarning: 'Content is highly sensitive. This view is recorded as an audit event.',
+    truncated: 'Truncated', trace: 'View request trace', traceTitle: 'Request trace · {{id}}', traceHint: '{{count}} audit events',
+    traceContent: '{{count}} related content variants',
     empty: 'No matching audit events', emptyHint: 'Change the filters or date range and try again.', disputeList: 'False-positive disputes',
     disputeListHint: 'Disputes are stored separately to preserve original evidence.', resolved: 'Resolved', unresolved: 'Open', noDisputes: 'No disputes yet'
   },
@@ -389,6 +420,9 @@ export const en = {
     byok_enabled: 'Personal provider connected', assistant_tool_invoked: 'Read-only assistant tool invoked',
     assistant_session_started: 'Assistant session started', assistant_answer_returned: 'Assistant answer returned',
     content_restored: 'Redacted content restored', security_baseline_failed: 'Security baseline check failed',
+    content_purged: 'Expired audit content purged', rate_limited: 'Request rate limited', provider_updated: 'Provider updated',
+    provider_disabled: 'Provider disabled', provider_tested: 'Provider connectivity tested', provider_credential_rotated: 'Provider credential rotated',
+    entitlement_updated: 'Entitlement updated', entitlement_revoked: 'Entitlement removed', key_constraints_updated: 'Key constraints updated',
     user_created: 'User created', user_updated: 'User updated', user_deactivated: 'User deactivated',
     user_password_reset: 'User password reset', team_created: 'Team created', team_updated: 'Team updated',
     app_created: 'Application created', app_updated: 'Application updated'

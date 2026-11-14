@@ -20,7 +20,8 @@ public enum Permission
     AuditExport,
     AssistantUse,
     SystemWrite,
-    UserWrite
+    UserWrite,
+    ContentRead
 }
 
 /// <summary>角色权限矩阵（PRD §7.1.4）。EndUser 的资源范围由服务端按属主收窄，不在此表授权。</summary>
@@ -37,7 +38,7 @@ public static class Rbac
             Permission.KeyRead, Permission.KeyWrite,
             Permission.BudgetWrite, Permission.UsageRead,
             Permission.AuditRead, Permission.AuditExport,
-            Permission.AssistantUse, Permission.SystemWrite, Permission.UserWrite
+            Permission.AssistantUse, Permission.SystemWrite, Permission.UserWrite, Permission.ContentRead
         ],
         [UserRole.SecurityAdmin] =
         [
@@ -46,7 +47,7 @@ public static class Rbac
             Permission.SecurityRead, Permission.SecurityWrite,
             Permission.KeyRead, Permission.UsageRead,
             Permission.AuditRead, Permission.AuditExport,
-            Permission.AssistantUse
+            Permission.AssistantUse, Permission.ContentRead
         ],
         [UserRole.TeamOwner] =
         [

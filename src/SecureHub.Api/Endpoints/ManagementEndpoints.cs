@@ -307,29 +307,29 @@ public static class ManagementEndpoints
             .ToListAsync(ct);
 
         var items = rows.Select(e => new
-            {
-                e.EventId,
-                e.Sequence,
-                e.OccurredAt,
-                e.EventType,
-                severity = e.Severity.ToString().ToLowerInvariant(),
-                action = e.Action.ToString().ToLowerInvariant(),
-                e.ActorType,
-                e.ActorLabel,
-                e.AppId,
-                e.RequestId,
-                e.ModelAlias,
-                e.ProviderId,
-                e.UpstreamModel,
-                e.RuleId,
-                e.ReasonCode,
-                e.InputTokens,
-                e.InputTokensOriginal,
-                e.OutputTokens,
-                billing_owner = e.BillingOwner.ToString().ToLowerInvariant(),
-                e.ContentMissing,
-                e.Hash
-            })
+        {
+            e.EventId,
+            e.Sequence,
+            e.OccurredAt,
+            e.EventType,
+            severity = e.Severity.ToString().ToLowerInvariant(),
+            action = e.Action.ToString().ToLowerInvariant(),
+            e.ActorType,
+            e.ActorLabel,
+            e.AppId,
+            e.RequestId,
+            e.ModelAlias,
+            e.ProviderId,
+            e.UpstreamModel,
+            e.RuleId,
+            e.ReasonCode,
+            e.InputTokens,
+            e.InputTokensOriginal,
+            e.OutputTokens,
+            billing_owner = e.BillingOwner.ToString().ToLowerInvariant(),
+            e.ContentMissing,
+            e.Hash
+        })
             .ToList();
 
         await http.Response.WriteAsJsonAsync(new { from, to, count = items.Count, data = items }, ct);

@@ -1568,15 +1568,15 @@ await foreach (var update in agent.RunStreamingAsync(messages, session, runOptio
 
 ### 12.1 国际化（T23）
 
-| 范围 | 规则 |
-| --- | --- |
-| 语言 | `zh-CN`（默认）/ `en`；一期只这两种，可扩展 |
-| 协商方式 | 后端读 `Accept-Language`；前端用 i18next，默认跟随浏览器，可手动切换并持久化 |
-| 本地化对象 | 面向人的文案：界面文字、错误 `message`、校验提示、邮件/导出标题 |
-| **不本地化** | 错误 `code`、审计 `eventType`、`reasonCode`、模型 ID、供应商 ID、角色名 |
-| 审计存储 | **只存 code，不存本地化文本** —— 否则切换语言后历史记录会变成两种语言的混合物 |
-| 时间/数字 | 前端用 `Intl.DateTimeFormat` / `Intl.NumberFormat`；后端统一 UTC + ISO 8601 |
-| 后端兜底 | 文案缺失时回落英文，不得抛异常或返回 key |
+| 范围         | 规则                                                                          |
+| ------------ | ----------------------------------------------------------------------------- |
+| 语言         | `zh-CN`（默认）/ `en`；一期只这两种，可扩展                                   |
+| 协商方式     | 后端读 `Accept-Language`；前端用 i18next，默认跟随浏览器，可手动切换并持久化  |
+| 本地化对象   | 面向人的文案：界面文字、错误 `message`、校验提示、邮件/导出标题               |
+| **不本地化** | 错误 `code`、审计 `eventType`、`reasonCode`、模型 ID、供应商 ID、角色名       |
+| 审计存储     | **只存 code，不存本地化文本** —— 否则切换语言后历史记录会变成两种语言的混合物 |
+| 时间/数字    | 前端用 `Intl.DateTimeFormat` / `Intl.NumberFormat`；后端统一 UTC + ISO 8601   |
+| 后端兜底     | 文案缺失时回落英文，不得抛异常或返回 key                                      |
 
 ---
 

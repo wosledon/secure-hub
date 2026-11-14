@@ -49,33 +49,33 @@ docs/                    PRD 与设计文档
 
 ## 已实现
 
-| 能力 | 说明 |
-| --- | --- |
-| 虚拟密钥 | `sk-sh-{env}-{keyId}-{secret}`，只存 SHA-256，常量时间比对，可吊销 |
-| 会话登录 | Cookie 会话 + RBAC（五角色 + EndUser 个人范围） |
-| 数据面 | `POST /v1/chat/completions`（含流式透传）、`GET /v1/models` |
-| 三级模型 ID | `[scope/]provider/model`，model 段允许含 `/`；歧义报错并给候选 |
-| 双账 | `billingOwner = org / user`，按**实际命中成员**记账 |
-| 护栏 | 身份证（mod 11-2）、手机、银行卡（Luhn）、邮箱、PEM、JWT、高熵密钥 |
-| 脱敏 | `mask` 模式原地改写，命中值以哈希留痕 |
-| 压缩 | 空白/Unicode 规范化、样板文本剥离、重复行折叠 + 完整性校验回退 |
-| 审计 | 链式哈希 + 逐条校验接口，时间截断到毫秒以保证可复验 |
-| 内容存储 | AES-256-GCM，AAD 绑定 `requestId|direction|variant`，按变体留存 |
-| 供应商 | 企业级 / 个人 BYOK，凭据 DataProtection 加密 |
-| 控制台 | 概览、供应商、密钥、审计（含链校验）、个人工作台 |
-| i18n | 中/英切换；后端 `Accept-Language` 本地化错误文案，审计只存 code |
+| 能力        | 说明                                                               |
+| ----------- | ------------------------------------------------------------------ |
+| 虚拟密钥    | `sk-sh-{env}-{keyId}-{secret}`，只存 SHA-256，常量时间比对，可吊销 |
+| 会话登录    | Cookie 会话 + RBAC（五角色 + EndUser 个人范围）                    |
+| 数据面      | `POST /v1/chat/completions`（含流式透传）、`GET /v1/models`        |
+| 三级模型 ID | `[scope/]provider/model`，model 段允许含 `/`；歧义报错并给候选     |
+| 双账        | `billingOwner = org / user`，按**实际命中成员**记账                |
+| 护栏        | 身份证（mod 11-2）、手机、银行卡（Luhn）、邮箱、PEM、JWT、高熵密钥 |
+| 脱敏        | `mask` 模式原地改写，命中值以哈希留痕                              |
+| 压缩        | 空白/Unicode 规范化、样板文本剥离、重复行折叠 + 完整性校验回退     |
+| 审计        | 链式哈希 + 逐条校验接口，时间截断到毫秒以保证可复验                |
+| 内容存储    | AES-256-GCM，AAD 绑定 `requestId                                   | direction | variant`，按变体留存 |
+| 供应商      | 企业级 / 个人 BYOK，凭据 DataProtection 加密                       |
+| 控制台      | 概览、供应商、密钥、审计（含链校验）、个人工作台                   |
+| i18n        | 中/英切换；后端 `Accept-Language` 本地化错误文案，审计只存 code    |
 
 ## 未实现（设计已就绪）
 
-| 能力 | 状态 |
-| --- | --- |
-| 策略引擎（YAML DSL、灰度、dry-run） | 表结构与文档已定义，未接线 |
-| 显式模型组 `ModelGroup` | 表已建；当前只做同名隐式分组 |
-| 配额/预算执行 | 实体已定义，未在请求路径强制 |
-| 目录同步（models.dev） | 未实现，供应商/模型当前需手工录入 |
-| 内建 AI 助手 | 未实现（依赖 `Microsoft.Agents.AI`） |
-| PostgreSQL 迁移脚本 | 可切换 Provider，但未生成迁移（当前使用 `EnsureCreated`） |
-| TOTP / 数据导出 / 误报申诉 | 未实现 |
+| 能力                                | 状态                                                      |
+| ----------------------------------- | --------------------------------------------------------- |
+| 策略引擎（YAML DSL、灰度、dry-run） | 表结构与文档已定义，未接线                                |
+| 显式模型组 `ModelGroup`             | 表已建；当前只做同名隐式分组                              |
+| 配额/预算执行                       | 实体已定义，未在请求路径强制                              |
+| 目录同步（models.dev）              | 未实现，供应商/模型当前需手工录入                         |
+| 内建 AI 助手                        | 未实现（依赖 `Microsoft.Agents.AI`）                      |
+| PostgreSQL 迁移脚本                 | 可切换 Provider，但未生成迁移（当前使用 `EnsureCreated`） |
+| TOTP / 数据导出 / 误报申诉          | 未实现                                                    |
 
 ---
 
@@ -111,16 +111,16 @@ dotnet test
 
 `src/SecureHub.Api/appsettings.json` → `SecureHub` 段：
 
-| 键 | 说明 |
-| --- | --- |
-| `Database.Provider` | `Sqlite` / `Postgres` |
-| `Database.ConnectionString` | SQLite 文件或 PG 连接串 |
-| `Security.DataDirectory` | 数据库、密钥、日志目录 |
-| `Content.*RetentionDays` | 原文 / 脱敏后 / 外发内容留存 |
-| `Guardrails.OnError` | `block`（fail-closed）/ `allow` |
-| `Compression.Enabled` | 是否启用文本级压缩 |
-| `LoadBalancing.Enabled` | 是否启用同名模型分流 |
-| `PersonalProviders.*` | BYOK 开关、供应商白名单、审计粒度 |
+| 键                          | 说明                              |
+| --------------------------- | --------------------------------- |
+| `Database.Provider`         | `Sqlite` / `Postgres`             |
+| `Database.ConnectionString` | SQLite 文件或 PG 连接串           |
+| `Security.DataDirectory`    | 数据库、密钥、日志目录            |
+| `Content.*RetentionDays`    | 原文 / 脱敏后 / 外发内容留存      |
+| `Guardrails.OnError`        | `block`（fail-closed）/ `allow`   |
+| `Compression.Enabled`       | 是否启用文本级压缩                |
+| `LoadBalancing.Enabled`     | 是否启用同名模型分流              |
+| `PersonalProviders.*`       | BYOK 开关、供应商白名单、审计粒度 |
 
 ---
 

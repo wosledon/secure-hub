@@ -1,19 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-  <PropertyGroup>
-    <RootNamespace>SecureHub.Api</RootNamespace>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\SecureHub.Core\SecureHub.Core.csproj" />
-    <ProjectReference Include="..\SecureHub.Data\SecureHub.Data.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-    <PackageReference Include="Microsoft.Extensions.AI" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
-    <PackageReference Include="OpenAI" />
-  </ItemGroup>
-  <!-- 前端构建产物随程序输出，保证 dotnet 运行/发布时能直接托管控制台 -->
-  <ItemGroup>
-    <Content Update="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
+    <PropertyGroup>
+        <RootNamespace>SecureHub.Api</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\SecureHub.Core\SecureHub.Core.csproj" />
+        <ProjectReference Include="..\SecureHub.Data\SecureHub.Data.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+        <PackageReference Include="Microsoft.Extensions.AI" />
+        <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+        <PackageReference Include="OpenAI" />
+    </ItemGroup>
+    <!-- 前端构建产物随程序输出，保证 dotnet 运行/发布时能直接托管控制台 -->
+    <ItemGroup>
+        <Content Update="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
 </Project>

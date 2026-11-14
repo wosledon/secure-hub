@@ -51,6 +51,12 @@ builder.Services.AddHttpClient("upstream", c =>
     c.DefaultRequestHeaders.Add("User-Agent", "SecureHub/0.1");
 });
 
+builder.Services.AddHttpClient("catalog", c =>
+{
+    c.Timeout = TimeSpan.FromMinutes(2);
+    c.DefaultRequestHeaders.Add("User-Agent", "SecureHub/0.1");
+});
+
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddScoped<ApiKeyAuthenticator>();
 builder.Services.AddSingleton<ContentCipher>();
@@ -58,6 +64,8 @@ builder.Services.AddSingleton<AuditWriter>();
 builder.Services.AddSingleton<ProviderCredentialStore>();
 builder.Services.AddSingleton<PolicyStore>();
 builder.Services.AddScoped<BudgetGuard>();
+builder.Services.AddSingleton<CatalogSyncService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CatalogSyncService>());
 builder.Services.AddScoped<ContentStore>();
 builder.Services.AddScoped<RouteResolver>();
 builder.Services.AddScoped<GuardrailPipeline>(_ => new GuardrailPipeline(

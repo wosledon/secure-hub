@@ -63,6 +63,8 @@ public static class ManagementEndpoints
         admin.MapPost("/budgets", UpsertBudgetAsync);
         admin.MapGet("/model-groups", ListModelGroupsAsync);
         admin.MapPost("/model-groups", UpsertModelGroupAsync);
+        admin.MapGet("/catalog", QueryCatalogAsync);
+        admin.MapPost("/catalog/sync", SyncCatalogAsync);
 
         var me = app.MapGroup("/api/me");
         me.MapGet("/providers", ListMyProvidersAsync);
@@ -550,6 +552,54 @@ public static class ManagementEndpoints
 
         await db.SaveChangesAsync(ct);
         await http.Response.WriteAsJsonAsync(new { id = group.Id, group.Name }, ct);
+    }
+
+    private static async Task QueryCatalogAsync(
+        HttpContext http, SessionStore sessions, SecureHubDbContext db,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (RequireAdmin(http, sessions, options.Value, Permission.CatalogRead) is null) return;
+
+        var provider = http.Request.Query["provider"].ToString();
+        var search = http.Request.Query["q"].ToString();
+
+        var query = db.CatalogModels.AsNoTracking();
+        if (!string.IsNullOrEmpty(provider)) query = query.Where(m => m.ProviderKey == provider);
+        if (!string.IsNullOrEmpty(search)) query = query.Where(m => m.ModelId.Contains(search));
+
+        var rows = await query.OrderBy(m => m.ProviderKey).ThenBy(m => m.ModelId).Take(500).ToListAsync(ct);
+
+        await http.Response.WriteAsJsonAsync(rows.Select(m => new
+        {
+            m.Id,
+            provider = m.ProviderKey,
+            model = m.ModelId,
+            m.Family,
+            m.SupportsTools,
+            m.SupportsReasoning,
+            m.ContextWindow,
+            m.MaxOutputTokens,
+            input_price = m.InputPricePerMillion,
+            output_price = m.OutputPricePerMillion,
+            m.SyncedAt
+        }), ct);
+    }
+
+    private static async Task SyncCatalogAsync(
+        HttpContext http, SessionStore sessions, CatalogSyncService sync,
+        IOptions<SecureHubOptions> options, CancellationToken ct)
+    {
+        if (RequireAdmin(http, sessions, options.Value, Permission.CatalogWrite) is null) return;
+
+        var result = await sync.SyncAsync(ct);
+        await http.Response.WriteAsJsonAsync(new
+        {
+            ok = result.Success,
+            providers = result.Providers,
+            models = result.Models,
+            error = result.Error,
+            synced_at = result.SyncedAt
+        }, ct);
     }
 
     // ---------- me ----------

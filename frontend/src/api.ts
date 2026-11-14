@@ -137,10 +137,11 @@ export const api = {
     request<{ ok: boolean; checked_count: number; first_break_sequence: number | null }>(
       '/api/admin/audit/verify'
     ),
-  auditExportUrl: (params?: { from?: string; to?: string }) => {
+  auditExportUrl: (params?: { from?: string; to?: string; limit?: number }) => {
     const search = new URLSearchParams();
     if (params?.from) search.set('from', params.from);
     if (params?.to) search.set('to', params.to);
+    if (params?.limit) search.set('limit', String(params.limit));
     const query = search.toString();
     return `/api/admin/audit/export${query ? `?${query}` : ''}`;
   },

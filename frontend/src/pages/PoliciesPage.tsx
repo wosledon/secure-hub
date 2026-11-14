@@ -36,8 +36,8 @@ import { api, type PolicyDryRunResult, type PolicyRow, type PolicySnapshot, type
 import { CodeBlock, ConfirmDialog, EmptyState, ErrorState, PageHeader, StatusChip, TableSkeleton } from '../components/ui';
 import { useFormatters } from '../utils/format';
 
-type PolicyForm = { policyKey: string; detector: string; action: string; priority: number; rollout: number; onError: string; changeReason: string };
-const initialForm: PolicyForm = { policyKey: 'pol-pii-block', detector: 'pii.cn_idcard', action: 'block', priority: 100, rollout: 100, onError: 'block', changeReason: 'console update' };
+type PolicyForm = { policyKey: string; detector: string; minMatches: number; action: string; priority: number; rollout: number; onError: string; changeReason: string };
+const initialForm: PolicyForm = { policyKey: 'pol-pii-block', detector: 'pii.cn_idcard', minMatches: 1, action: 'block', priority: 100, rollout: 100, onError: 'block', changeReason: 'console update' };
 
 export default function PoliciesPage() {
   const { t } = useTranslation();
@@ -69,7 +69,7 @@ export default function PoliciesPage() {
 
   const body = (): PublishPolicyBody => ({
     policyKey: form.policyKey.trim(), priority: form.priority, scope: { teams: [], apps: [], models: [] },
-    when: { any: [{ detector: form.detector.trim(), minMatches: 1 }] },
+    when: { any: [{ detector: form.detector.trim(), minMatches: Math.max(1, form.minMatches) }] },
     then: { action: observation ? 'alert' : form.action, reason: form.detector.trim(), ruleId: form.detector.trim() },
     onError: form.onError, rolloutPercent: form.rollout, changeReason: form.changeReason.trim()
   });
@@ -217,6 +217,7 @@ export default function PoliciesPage() {
           </Stack>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField fullWidth type="number" label={t('policies.priority')} value={form.priority} onChange={(event) => setForm({ ...form, priority: Number(event.target.value) })} inputProps={{ min: 0 }} />
+            <TextField fullWidth type="number" label={t('policies.minMatches')} value={form.minMatches} onChange={(event) => setForm({ ...form, minMatches: Number(event.target.value) })} inputProps={{ min: 1 }} helperText={t('policies.minMatchesHint')} />
             <TextField fullWidth type="number" label={t('policies.rollout')} value={form.rollout} onChange={(event) => setForm({ ...form, rollout: Number(event.target.value) })} inputProps={{ min: 0, max: 100 }} />
           </Stack>
           <TextField label={t('policies.changeReason')} value={form.changeReason} onChange={(event) => setForm({ ...form, changeReason: event.target.value })} name="changeReason" autoComplete="off" />

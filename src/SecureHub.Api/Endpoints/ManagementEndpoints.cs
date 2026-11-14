@@ -699,10 +699,14 @@ public static class ManagementEndpoints
         http.Response.Headers.ContentDisposition =
             $"attachment; filename=\"audit-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.ndjson\"";
 
+        var limit = int.TryParse(http.Request.Query["limit"], out var requested)
+            ? Math.Clamp(requested, 1, 200_000)
+            : 10_000;
+
         var rows = await db.AuditEvents.AsNoTracking()
             .Where(e => e.OccurredAt >= from && e.OccurredAt <= to)
             .OrderBy(e => e.Sequence)
-            .Take(10_000)
+            .Take(limit)
             .ToListAsync(ct);
 
         foreach (var e in rows)

@@ -36,10 +36,49 @@ public static class PolicyEndpoints
     {
         var group = app.MapGroup("/api/admin/policies");
         group.MapGet("", ListAsync);
+        group.MapGet("/snapshot", (PolicyStore store) => Snapshot(store));
         group.MapPost("", PublishAsync);
         group.MapPost("/{policyKey}/activate", ActivateAsync);
         group.MapPost("/dry-run", DryRunAsync);
     }
+
+    private static IResult Snapshot(HttpContext http, PolicyStore store) =>
+        Results.Ok(new
+        {
+            count = store.Count,
+            error = store.LastError,
+            policies = store.Snapshot.Select(p => new
+            {
+                policy_key = p.PolicyKey,
+                version = p.Version,
+                priority = p.Priority,
+                action = p.Action.ToString().ToLowerInvariant(),
+                rollout = p.RolloutPercent,
+                apps = p.Scope.Apps,
+                teams = p.Scope.Teams,
+                any = p.Condition.Any.Select(d => d.Detector),
+                all = p.Condition.All.Select(d => d.Detector)
+            })
+        });
+
+    private static IResult Snapshot(PolicyStore store) =>
+        Results.Ok(new
+        {
+            count = store.Count,
+            error = store.LastError,
+            policies = store.Snapshot.Select(p => new
+            {
+                policy_key = p.PolicyKey,
+                version = p.Version,
+                priority = p.Priority,
+                action = p.Action.ToString().ToLowerInvariant(),
+                rollout = p.RolloutPercent,
+                apps = p.Scope.Apps,
+                teams = p.Scope.Teams,
+                any = p.Condition.Any.Select(d => d.Detector),
+                all = p.Condition.All.Select(d => d.Detector)
+            })
+        });
 
     private static async Task ListAsync(
         HttpContext http, SessionStore sessions, SecureHubDbContext db,

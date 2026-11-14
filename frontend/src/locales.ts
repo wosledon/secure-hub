@@ -6,7 +6,11 @@ export const zhCN = {
     keys: '虚拟密钥', policies: '安全策略', budgets: '用量与预算', audit: '审计日志',
     organization: '组织管理', entitlements: '访问授权', observability: '可观测性', system: '系统',
     models: '可用模型', logout: '退出登录', management: '企业管理', personal: '个人空间',
-    account: '账号与安全', main: '主导航', open: '打开导航', close: '关闭导航'
+    account: '账号与安全', main: '主导航', open: '打开导航', close: '关闭导航',
+    scopeOrg: '企业管理', scopePersonal: '个人空间',
+    groupOverview: '概览', groupAccess: '接入', groupGovern: '治理', groupInsights: '洞察', groupManage: '管理',
+    groupMyWork: '我的工作台', groupMyAccess: '接入与密钥', groupShared: '共享与助手',
+    myOverview: '个人总览', myUsage: '我的用量', myProviders: '我的供应商', myKeys: '我的密钥', myModels: '可用模型',
   },
   login: {
     eyebrow: '企业级 AI 治理入口', title: '让每一次 AI 调用，都安全、可控、可审计。',
@@ -135,8 +139,12 @@ export const zhCN = {
   },
   me: {
     title: '个人工作台', description: '管理你的模型接入、个人密钥与近 30 天用量。个人流量同样纳入企业安全审计。',
-    usage: '我的用量', providers: '我的供应商', keys: '我的密钥', models: '可用模型', overview: '工作台总览',
+    usage: '我的用量', providers: '我的供应商', keys: '我的密钥', models: '可用模型', overview: '个人总览',
     rotateKey: '轮换密钥', revokeKey: '吊销密钥',
+    usageHint: '近 30 天个人调用的 Token、成本与模型分布。',
+    keysHint: '个人虚拟密钥用于访问 me/ 命名空间，可轮换或吊销。',
+    providersHint: '个人 BYOK 供应商，费用由你承担，调用仍被审计。',
+    activeKeys: '有效密钥', providersCount: '{{count}} 个个人供应商',
     revokeKeyHint: '吊销「{{name}}」后，使用它的应用会立即失去访问权限。此操作不可撤销。',
     testProvider: '测试连接', disableProvider: '停用供应商',
     modelsHint: '使用个人虚拟密钥查看当前可访问的完整模型 ID。', byokHint: '填入自己的供应商 Key，费用由你承担，调用仍会被企业安全策略检查并强制审计。',
@@ -285,7 +293,11 @@ export const en = {
     keys: 'Virtual keys', policies: 'Security policies', budgets: 'Usage & budgets', audit: 'Audit log',
     organization: 'Organization', entitlements: 'Entitlements', observability: 'Observability', system: 'System',
     models: 'Available models', logout: 'Sign out', management: 'MANAGEMENT', personal: 'PERSONAL',
-    account: 'Account & security', main: 'Main navigation', open: 'Open navigation', close: 'Close navigation'
+    account: 'Account & security', main: 'Main navigation', open: 'Open navigation', close: 'Close navigation',
+    scopeOrg: 'Enterprise', scopePersonal: 'Personal',
+    groupOverview: 'OVERVIEW', groupAccess: 'ACCESS', groupGovern: 'GOVERNANCE', groupInsights: 'INSIGHTS', groupManage: 'ADMINISTRATION',
+    groupMyWork: 'MY WORKSPACE', groupMyAccess: 'ACCESS & KEYS', groupShared: 'SHARED & ASSISTANT',
+    myOverview: 'My overview', myUsage: 'My usage', myProviders: 'My providers', myKeys: 'My keys', myModels: 'Available models',
   },
   login: {
     eyebrow: 'ENTERPRISE AI GOVERNANCE', title: 'Every AI call. Secure, governed, and auditable.',
@@ -414,8 +426,12 @@ export const en = {
   },
   me: {
     title: 'My workspace', description: 'Manage personal providers, keys, and the last 30 days of usage. Personal traffic follows the same enterprise audit controls.',
-    usage: 'My usage', providers: 'My providers', keys: 'My keys', models: 'Available models', overview: 'Workspace overview',
+    usage: 'My usage', providers: 'My providers', keys: 'My keys', models: 'Available models', overview: 'My overview',
     rotateKey: 'Rotate key', revokeKey: 'Revoke key',
+    usageHint: 'Personal token usage, cost, and model distribution over the last 30 days.',
+    keysHint: 'Personal virtual keys access the me/ namespace and can be rotated or revoked.',
+    providersHint: 'Personal BYOK providers; you pay the provider, while calls remain audited.',
+    activeKeys: 'Active keys', providersCount: '{{count}} personal provider(s)',
     revokeKeyHint: 'Revoking “{{name}}” immediately removes access for applications using it. This cannot be undone.',
     testProvider: 'Test connection', disableProvider: 'Disable provider',
     modelsHint: 'Use a personal virtual key to inspect fully qualified model IDs currently available to you.', byokHint: 'Use your own provider key. You pay the provider, while gateway security checks and mandatory audit still apply.',

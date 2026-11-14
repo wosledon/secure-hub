@@ -26,10 +26,10 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import DnsIcon from '@mui/icons-material/Dns';
 import GroupsIcon from '@mui/icons-material/Groups';
 import KeyIcon from '@mui/icons-material/Key';
-import LightModeIcon from '@mui/icons-material/LightMode';
-import LogoutIcon from '@mui/icons-material/Logout';
+import LightModeIcon from '@mui/icons-material/LightMode';import LogoutIcon from '@mui/icons-material/Logout';
 import MenuIcon from '@mui/icons-material/Menu';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import MemoryIcon from '@mui/icons-material/Memory';
 import InsightsIcon from '@mui/icons-material/Insights';
 import PaidIcon from '@mui/icons-material/Paid';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
@@ -77,6 +77,9 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
   const [accountOpen, setAccountOpen] = useState(false);
   const [userMenu, setUserMenu] = useState<HTMLElement | null>(null);
   const [health, setHealth] = useState<{ status: string; version: string } | null>(null);
+  const [scope, setScope] = useState<'org' | 'personal'>(() =>
+    localStorage.getItem('sh.scope') === 'personal' ? 'personal' : 'org'
+  );
 
   useEffect(() => {
     api.me().then((r) => setSession(r.user)).catch(() => setSession(null)).finally(() => setLoading(false));
@@ -89,31 +92,71 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
 
   useEffect(() => setMobileOpen(false), [location.pathname]);
 
+  useEffect(() => {
+    if (!session) return;
+    const orgPaths = ['/overview', '/providers', '/organization', '/entitlements', '/routing',
+      '/keys', '/policies', '/usage', '/observability', '/audit', '/system'];
+    if (location.pathname.startsWith('/workspace')) {
+      setScope('personal');
+      localStorage.setItem('sh.scope', 'personal');
+    } else if (orgPaths.some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`))) {
+      setScope('org');
+      localStorage.setItem('sh.scope', 'org');
+    }
+  }, [location.pathname, session]);
+
   const isEndUserOnly = useMemo(
     () => !!session && session.roles.length > 0 && session.roles.every((role) => role === ROLE_END_USER),
     [session]
   );
 
-  const adminItems: NavItem[] = [
-    { path: '/overview', label: t('nav.overview'), icon: <SpaceDashboardIcon />, admin: true },
-    { path: '/providers', label: t('nav.providers'), icon: <DnsIcon />, admin: true },
-    { path: '/catalog', label: t('nav.catalog'), icon: <AssessmentIcon />, admin: true },
-    { path: '/organization', label: t('nav.organization'), icon: <GroupsIcon />, admin: true },
-    { path: '/entitlements', label: t('nav.entitlements'), icon: <VerifiedUserIcon />, admin: true },
-    { path: '/routing', label: t('nav.routing'), icon: <RouteIcon />, admin: true },
-    { path: '/keys', label: t('nav.keys'), icon: <KeyIcon />, admin: true },
-    { path: '/policies', label: t('nav.policies'), icon: <SecurityIcon />, admin: true },
-    { path: '/usage', label: t('nav.budgets'), icon: <PaidIcon />, admin: true },
-    { path: '/observability', label: t('nav.observability'), icon: <InsightsIcon />, admin: true },
-    { path: '/audit', label: t('nav.audit'), icon: <ShieldOutlinedIcon />, admin: true },
-    { path: '/system', label: t('nav.system'), icon: <SettingsIcon />, admin: true }
+  const orgGroups: Array<{ label: string; items: NavItem[] }> = [
+    { label: t('nav.groupOverview'), items: [
+      { path: '/overview', label: t('nav.overview'), icon: <SpaceDashboardIcon /> }
+    ] },
+    { label: t('nav.groupAccess'), items: [
+      { path: '/providers', label: t('nav.providers'), icon: <DnsIcon /> },
+      { path: '/catalog', label: t('nav.catalog'), icon: <AssessmentIcon /> },
+      { path: '/routing', label: t('nav.routing'), icon: <RouteIcon /> }
+    ] },
+    { label: t('nav.groupGovern'), items: [
+      { path: '/entitlements', label: t('nav.entitlements'), icon: <VerifiedUserIcon /> },
+      { path: '/keys', label: t('nav.keys'), icon: <KeyIcon /> },
+      { path: '/policies', label: t('nav.policies'), icon: <SecurityIcon /> }
+    ] },
+    { label: t('nav.groupInsights'), items: [
+      { path: '/usage', label: t('nav.budgets'), icon: <PaidIcon /> },
+      { path: '/observability', label: t('nav.observability'), icon: <InsightsIcon /> },
+      { path: '/audit', label: t('nav.audit'), icon: <ShieldOutlinedIcon /> },
+      { path: '/assistant', label: t('nav.assistant'), icon: <AutoAwesomeIcon /> }
+    ] },
+    { label: t('nav.groupManage'), items: [
+      { path: '/organization', label: t('nav.organization'), icon: <GroupsIcon /> },
+      { path: '/system', label: t('nav.system'), icon: <SettingsIcon /> }
+    ] }
   ];
-  const personalItems: NavItem[] = [
-    { path: '/workspace', label: t('nav.workspace'), icon: <PersonOutlineIcon /> },
-    { path: '/assistant', label: t('nav.assistant'), icon: <AutoAwesomeIcon /> }
+
+  const personalGroups: Array<{ label: string; items: NavItem[] }> = [
+    { label: t('nav.groupMyWork'), items: [
+      { path: '/workspace', label: t('nav.myOverview'), icon: <PersonOutlineIcon /> },
+      { path: '/workspace/usage', label: t('nav.myUsage'), icon: <PaidIcon /> }
+    ] },
+    { label: t('nav.groupMyAccess'), items: [
+      { path: '/workspace/providers', label: t('nav.myProviders'), icon: <DnsIcon /> },
+      { path: '/workspace/keys', label: t('nav.myKeys'), icon: <KeyIcon /> },
+      { path: '/workspace/models', label: t('nav.myModels'), icon: <AssessmentIcon /> }
+    ] },
+    { label: t('nav.groupShared'), items: [
+      { path: '/catalog', label: t('nav.catalog'), icon: <MemoryIcon /> },
+      { path: '/assistant', label: t('nav.assistant'), icon: <AutoAwesomeIcon /> }
+    ] }
   ];
-  const items = [...adminItems, ...personalItems];
-  const current = items.find((item) => location.pathname.startsWith(item.path));
+
+  const activeGroups = isEndUserOnly || scope === 'personal' ? personalGroups : orgGroups;
+  const allItems = [...orgGroups, ...personalGroups].flatMap((group) => group.items);
+  const current = allItems
+    .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0];
 
   if (loading) {
     return <Box display="flex" height="100vh" alignItems="center" justifyContent="center"><CircularProgress aria-label={t('common.loading')} /></Box>;
@@ -135,56 +178,61 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.07)', mx: 2 }} />
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 2 }}>
         {!isEndUserOnly && (
-          <>
-            <Typography variant="overline" sx={{ px: 1.25, color: 'rgba(215,221,232,0.45)', display: 'block', mb: 0.75 }}>
-              {t('nav.management')}
-            </Typography>
-            <List disablePadding aria-label={t('nav.main')}>
-              {adminItems.map((item) => (
-                <ListItemButton
-                  key={item.path}
-                  component={RouterLink}
-                  to={item.path}
-                  selected={location.pathname.startsWith(item.path)}
-                  sx={{
-                    borderRadius: 2, mb: 0.35, minHeight: 42, color: 'rgba(215,221,232,0.76)',
-                    '& .MuiListItemIcon-root': { color: 'rgba(215,221,232,0.52)' },
-                    '&:hover': { bgcolor: 'rgba(255,255,255,0.055)', color: '#FFF' },
-                    '&.Mui-selected': { bgcolor: 'rgba(113,103,240,0.19)', color: '#FFF' },
-                    '&.Mui-selected .MuiListItemIcon-root': { color: '#A5B4FC' },
-                    '&.Mui-selected:hover': { bgcolor: 'rgba(113,103,240,0.25)' }
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 36, '& svg': { fontSize: 20 } }}>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: 13, fontWeight: 550 }} />
-                </ListItemButton>
-              ))}
-            </List>
-          </>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, p: 0.5, mb: 2, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)' }}>
+            {(['org', 'personal'] as const).map((value) => (
+              <Box
+                key={value}
+                component="button"
+                type="button"
+                onClick={() => {
+                  setScope(value);
+                  localStorage.setItem('sh.scope', value);
+                  navigate(value === 'org' ? '/overview' : '/workspace');
+                }}
+                aria-pressed={scope === value}
+                sx={{
+                  border: 0, borderRadius: 1.5, py: 0.75, cursor: 'pointer',
+                  fontSize: 12, fontWeight: 600,
+                  color: scope === value ? '#111827' : 'rgba(215,221,232,0.72)',
+                  bgcolor: scope === value ? '#E5E7EB' : 'transparent'
+                }}
+              >
+                {value === 'org' ? t('nav.scopeOrg') : t('nav.scopePersonal')}
+              </Box>
+            ))}
+          </Box>
         )}
-        <Typography variant="overline" sx={{ px: 1.25, color: 'rgba(215,221,232,0.45)', display: 'block', mt: 2.5, mb: 0.75 }}>
-          {t('nav.personal')}
-        </Typography>
-        <List disablePadding>
-          {personalItems.map((item) => (
-            <ListItemButton
-              key={item.path}
-              component={RouterLink}
-              to={item.path}
-              selected={location.pathname.startsWith(item.path)}
-              sx={{
-                borderRadius: 2, mb: 0.35, minHeight: 42, color: 'rgba(215,221,232,0.76)',
-                '& .MuiListItemIcon-root': { color: 'rgba(215,221,232,0.52)' },
-                '&:hover': { bgcolor: 'rgba(255,255,255,0.055)', color: '#FFF' },
-                '&.Mui-selected': { bgcolor: 'rgba(113,103,240,0.19)', color: '#FFF' },
-                '&.Mui-selected .MuiListItemIcon-root': { color: '#A5B4FC' }
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: 36, '& svg': { fontSize: 20 } }}>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: 13, fontWeight: 550 }} />
-            </ListItemButton>
-          ))}
-        </List>
+        {activeGroups.map((group) => (
+          <Box key={group.label} sx={{ mb: 2 }}>
+            <Typography variant="overline" sx={{ px: 1.25, color: 'rgba(215,221,232,0.45)', display: 'block', mb: 0.5 }}>
+              {group.label}
+            </Typography>
+            <List disablePadding aria-label={group.label}>
+              {group.items.map((item) => {
+                const selected = current?.path === item.path;
+                return (
+                  <ListItemButton
+                    key={`${group.label}-${item.path}`}
+                    component={RouterLink}
+                    to={item.path}
+                    selected={selected}
+                    sx={{
+                      borderRadius: 2, mb: 0.35, minHeight: 40, color: 'rgba(215,221,232,0.76)',
+                      '& .MuiListItemIcon-root': { color: 'rgba(215,221,232,0.52)' },
+                      '&:hover': { bgcolor: 'rgba(255,255,255,0.055)', color: '#FFF' },
+                      '&.Mui-selected': { bgcolor: 'rgba(113,103,240,0.19)', color: '#FFF' },
+                      '&.Mui-selected .MuiListItemIcon-root': { color: '#A5B4FC' },
+                      '&.Mui-selected:hover': { bgcolor: 'rgba(113,103,240,0.25)' }
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 34, '& svg': { fontSize: 19 } }}>{item.icon}</ListItemIcon>
+                    <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: 13, fontWeight: 550 }} />
+                  </ListItemButton>
+                );
+              })}
+            </List>
+          </Box>
+        ))}
       </Box>
       <Box sx={{ m: 1.5, p: 1.5, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2.5, bgcolor: 'rgba(255,255,255,0.025)' }}>
         <Stack direction="row" alignItems="center" spacing={1}>
@@ -264,17 +312,21 @@ export default function App({ mode, onToggleMode }: { mode: PaletteMode; onToggl
             <Routes>
             <Route path="/overview" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <DashboardPage />} />
             <Route path="/providers" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <ProvidersPage />} />
-            <Route path="/catalog" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <CatalogPage />} />
+            <Route path="/catalog" element={<CatalogPage readOnly={isEndUserOnly} />} />
             <Route path="/organization" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <OrganizationPage />} />
             <Route path="/entitlements" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <EntitlementsPage />} />
             <Route path="/routing" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <RoutingPage />} />
-            <Route path="/keys" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <KeysPage />} />
+            <Route path="/keys" element={isEndUserOnly ? <Navigate to="/workspace/keys" replace /> : <KeysPage />} />
             <Route path="/policies" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <PoliciesPage />} />
-            <Route path="/usage" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <UsagePage />} />
+            <Route path="/usage" element={isEndUserOnly ? <Navigate to="/workspace/usage" replace /> : <UsagePage />} />
             <Route path="/observability" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <ObservabilityPage />} />
             <Route path="/audit" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <AuditPage />} />
             <Route path="/system" element={isEndUserOnly ? <Navigate to="/workspace" replace /> : <SystemPage />} />
-            <Route path="/workspace" element={<WorkspacePage />} />
+            <Route path="/workspace" element={<WorkspacePage section="overview" />} />
+            <Route path="/workspace/usage" element={<WorkspacePage section="usage" />} />
+            <Route path="/workspace/providers" element={<WorkspacePage section="providers" />} />
+            <Route path="/workspace/keys" element={<WorkspacePage section="keys" />} />
+            <Route path="/workspace/models" element={<WorkspacePage section="models" />} />
             <Route path="/assistant" element={<AssistantWorkspace />} />
             <Route path="/admin" element={<Navigate to={isEndUserOnly ? '/workspace' : '/overview'} replace />} />
             <Route path="/me" element={<Navigate to="/workspace" replace />} />

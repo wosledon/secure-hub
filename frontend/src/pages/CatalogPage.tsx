@@ -33,7 +33,7 @@ import { CopyButton, EmptyState, ErrorState, PageHeader, TableSkeleton } from '.
 import ProviderOnboardingDialog from '../components/ProviderOnboardingDialog';
 import { useFormatters } from '../utils/format';
 
-export default function CatalogPage() {
+export default function CatalogPage({ readOnly = false }: { readOnly?: boolean }) {
   const { t } = useTranslation();
   const format = useFormatters();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -96,8 +96,8 @@ export default function CatalogPage() {
     <Stack spacing={3}>
       <PageHeader title={t('catalog.title')} description={t('catalog.description')} actions={<>
         <Tooltip title={t('common.refresh')}><IconButton onClick={() => void load()} aria-label={t('common.refresh')}><RefreshIcon /></IconButton></Tooltip>
-        <Button variant="outlined" startIcon={<SyncIcon />} onClick={() => void sync()} disabled={syncing}>{syncing ? t('catalog.syncing') : t('catalog.sync')}</Button>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOnboarding(true)}>{t('providers.add')}</Button>
+        {!readOnly && <Button variant="outlined" startIcon={<SyncIcon />} onClick={() => void sync()} disabled={syncing}>{syncing ? t('catalog.syncing') : t('catalog.sync')}</Button>}
+        {!readOnly && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOnboarding(true)}>{t('providers.add')}</Button>}
       </>} />
       {error && <ErrorState message={error} retry={() => void load()} />}
       {message && <Alert severity="info" onClose={() => setMessage(null)}>{message}</Alert>}

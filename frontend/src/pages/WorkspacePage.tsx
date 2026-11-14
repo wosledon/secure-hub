@@ -8,23 +8,22 @@ import {
   CardContent,
   Chip,
   Stack,
-  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-  Tabs,
   Typography
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
 import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
 import KeyIcon from '@mui/icons-material/Key';
 import MemoryIcon from '@mui/icons-material/Memory';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import TokenOutlinedIcon from '@mui/icons-material/TokenOutlined';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, type ModelRow, type MyKeyRow, type MyProviderRow, type UsageRow } from '../api';
 import { CodeBlock, CopyButton, ConfirmDialog, EmptyState, ErrorState, PageHeader, SecretDialog, StatCard, StatusChip, TableSkeleton } from '../components/ui';
@@ -32,22 +31,95 @@ import ProviderOnboardingDialog from '../components/ProviderOnboardingDialog';
 import { useFormatters } from '../utils/format';
 
 const DEVKEY_STORAGE = 'sh.devkey';
-const tabs = ['usage', 'providers', 'keys', 'models'] as const;
 
-export default function WorkspacePage() {
+export type WorkspaceSection = 'overview' | 'usage' | 'providers' | 'keys' | 'models';
+
+export default function WorkspacePage({ section = 'overview' }: { section?: WorkspaceSection }) {
   const { t } = useTranslation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const active = tabs.includes(searchParams.get('tab') as typeof tabs[number]) ? searchParams.get('tab')! : 'usage';
+  const titles: Record<WorkspaceSection, { title: string; description: string }> = {
+    overview: { title: t('me.overview'), description: t('me.description') },
+    usage: { title: t('me.usage'), description: t('me.usageHint') },
+    providers: { title: t('me.providers'), description: t('me.byokHint') },
+    keys: { title: t('me.keys'), description: t('me.keysHint') },
+    models: { title: t('me.models'), description: t('me.modelsHint') }
+  };
+
   return (
     <Stack spacing={3}>
-      <PageHeader title={t('me.title')} description={t('me.description')} />
-      <Tabs value={active} onChange={(_, value) => setSearchParams(value === 'usage' ? {} : { tab: value })} variant="scrollable" sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tab value="usage" label={t('me.usage')} /><Tab value="providers" label={t('me.providers')} /><Tab value="keys" label={t('me.keys')} /><Tab value="models" label={t('me.models')} />
-      </Tabs>
-      {active === 'usage' && <MyUsage />}
-      {active === 'providers' && <MyProviders />}
-      {active === 'keys' && <MyKeys />}
-      {active === 'models' && <MyModels />}
+      <PageHeader title={titles[section].title} description={titles[section].description} />
+      {section === 'overview' && <WorkspaceOverview />}
+      {section === 'usage' && <MyUsage />}
+      {section === 'providers' && <MyProviders />}
+      {section === 'keys' && <MyKeys />}
+      {section === 'models' && <MyModels />}
+    </Stack>
+  );
+}
+
+function WorkspaceOverview() {
+  const { t } = useTranslation();
+  const format = useFormatters();
+  const [usage, setUsage] = useState<UsageRow[]>([]);
+  const [providers, setProviders] = useState<MyProviderRow[]>([]);
+  const [keys, setKeys] = useState<MyKeyRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([api.myUsage(), api.myProviders(), api.myKeys()])
+      .then(([usageResult, providerRows, keyRows]) => {
+        setUsage(usageResult.data);
+        setProviders(providerRows);
+        setKeys(keyRows);
+      })
+      .catch((err) => setError((err as Error).message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const totals = usage.reduce(
+    (sum, row) => ({
+      requests: sum.requests + row.requests,
+      tokens: sum.tokens + row.input_tokens + row.output_tokens,
+      cost: sum.cost + row.cost_usd
+    }),
+    { requests: 0, tokens: 0, cost: 0 }
+  );
+  const activeKeys = keys.filter((key) => !key.is_revoked).length;
+
+  const links = [
+    { to: '/workspace/providers', title: t('me.providers'), hint: t('me.providersHint'), icon: <CloudQueueIcon /> },
+    { to: '/workspace/keys', title: t('me.keys'), hint: t('me.keysHint'), icon: <KeyIcon /> },
+    { to: '/workspace/models', title: t('me.models'), hint: t('me.modelsHint'), icon: <MemoryIcon /> },
+    { to: '/workspace/usage', title: t('me.usage'), hint: t('me.usageHint'), icon: <ReceiptLongIcon /> }
+  ];
+
+  return (
+    <Stack spacing={3}>
+      {error && <ErrorState message={error} />}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }, gap: 2 }}>
+        <StatCard label={t('usage.totalRequests')} value={loading ? '—' : format.number(totals.requests)} caption={t('common.last30Days')} icon={<ReceiptLongIcon fontSize="small" />} />
+        <StatCard label={t('usage.totalTokens')} value={loading ? '—' : format.compact(totals.tokens)} caption={t('common.last30Days')} icon={<TokenOutlinedIcon fontSize="small" />} tone="secondary" />
+        <StatCard label={t('usage.totalCost')} value={loading ? '—' : format.currency(totals.cost)} caption={t('me.billingUser')} icon={<CurrencyExchangeIcon fontSize="small" />} tone="success" />
+        <StatCard label={t('me.activeKeys')} value={loading ? '—' : format.number(activeKeys)} caption={t('me.providersCount', { count: providers.length })} icon={<KeyIcon fontSize="small" />} tone="warning" />
+      </Box>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
+        {links.map((link) => (
+          <Card key={link.to} component={RouterLink} to={link.to} sx={{ textDecoration: 'none', transition: 'border-color 160ms ease', '&:hover': { borderColor: 'primary.main' } }}>
+            <CardContent>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Box sx={{ width: 38, height: 38, borderRadius: 2, display: 'grid', placeItems: 'center', bgcolor: 'action.hover', color: 'primary.main' }}>{link.icon}</Box>
+                <Box flexGrow={1} minWidth={0}>
+                  <Typography variant="subtitle1">{link.title}</Typography>
+                  <Typography variant="body2" color="text.secondary" noWrap>{link.hint}</Typography>
+                </Box>
+                <ArrowForwardIcon fontSize="small" color="action" />
+              </Stack>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
     </Stack>
   );
 }

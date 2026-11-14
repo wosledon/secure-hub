@@ -153,6 +153,14 @@ public static class AuditEventTypes
     public const string AssistantAnswerReturned = "assistant_answer_returned";
     public const string ContentRestored = "content_restored";
     public const string SecurityBaselineFailed = "security_baseline_failed";
+    public const string UserCreated = "user_created";
+    public const string UserUpdated = "user_updated";
+    public const string UserDeactivated = "user_deactivated";
+    public const string UserPasswordReset = "user_password_reset";
+    public const string TeamCreated = "team_created";
+    public const string TeamUpdated = "team_updated";
+    public const string AppCreated = "app_created";
+    public const string AppUpdated = "app_updated";
 }
 
 /// <summary>审计/错误原因码（机器可读，永不本地化）。</summary>

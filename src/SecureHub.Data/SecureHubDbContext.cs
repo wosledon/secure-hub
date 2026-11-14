@@ -39,6 +39,7 @@ public class SecureHubDbContext : DbContext
     public DbSet<SecurityPolicyVersion> SecurityPolicyVersions => Set<SecurityPolicyVersion>();
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<CatalogModel> CatalogModels => Set<CatalogModel>();
+    public DbSet<CatalogProvider> CatalogProviders => Set<CatalogProvider>();
     public DbSet<AssistantSession> AssistantSessions => Set<AssistantSession>();
     public DbSet<AssistantMessage> AssistantMessages => Set<AssistantMessage>();
     public DbSet<RedactionToken> RedactionTokens => Set<RedactionToken>();
@@ -59,6 +60,7 @@ public class SecureHubDbContext : DbContext
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.HasIndex(x => x.Name).IsUnique();
         });
 
         b.Entity<App>(e =>
@@ -240,6 +242,16 @@ public class SecureHubDbContext : DbContext
             e.Property(x => x.InputPricePerMillion).HasPrecision(18, 6);
             e.Property(x => x.OutputPricePerMillion).HasPrecision(18, 6);
             e.HasIndex(x => x.ProviderKey);
+        });
+
+        b.Entity<CatalogProvider>(e =>
+        {
+            e.HasKey(x => x.ProviderKey);
+            e.Property(x => x.ProviderKey).HasMaxLength(100);
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Api).HasMaxLength(500);
+            e.Property(x => x.Doc).HasMaxLength(500);
+            e.Property(x => x.Npm).HasMaxLength(200);
         });
 
         b.Entity<AssistantSession>(e =>

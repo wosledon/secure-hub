@@ -35,6 +35,27 @@ public sealed class ProviderCredential
     public DateTimeOffset? RetiredAt { get; set; }
 }
 
+/// <summary>models.dev 目录中的供应商元数据快照（用于接入向导，不包含任何凭据）。</summary>
+public sealed class CatalogProvider
+{
+    /// <summary>models.dev provider id，如 openai / deepseek。</summary>
+    public string ProviderKey { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>models.dev 提供的 OpenAI 兼容端点；部分供应商缺失，需要用户补充。</summary>
+    public string? Api { get; set; }
+
+    public string? Doc { get; set; }
+    public string? Npm { get; set; }
+
+    /// <summary>JSON 数组，形如 ["OPENAI_API_KEY"]。</summary>
+    public string? EnvJson { get; set; }
+
+    public int ModelCount { get; set; }
+    public DateTimeOffset SyncedAt { get; set; }
+}
+
 /// <summary>供应商下的具体模型（provider × model 的 offering）。</summary>
 public sealed class ProviderOffering
 {

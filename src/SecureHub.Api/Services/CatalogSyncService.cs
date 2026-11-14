@@ -110,6 +110,7 @@ public sealed class CatalogSyncService(
 
             var now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             var parsed = new List<CatalogModel>();
+            var parsedProviders = new List<CatalogProvider>();
             var providerCount = 0;
 
             foreach (var provider in document.RootElement.EnumerateObject())
@@ -123,9 +124,11 @@ public sealed class CatalogSyncService(
                     continue;
                 }
 
+                var modelCount = 0;
                 foreach (var model in models.EnumerateObject())
                 {
                     if (model.Value.ValueKind != JsonValueKind.Object) continue;
+                    modelCount++;
 
                     parsed.Add(new CatalogModel
                     {
@@ -145,6 +148,18 @@ public sealed class CatalogSyncService(
                         SyncedAt = now
                     });
                 }
+
+                parsedProviders.Add(new CatalogProvider
+                {
+                    ProviderKey = provider.Name,
+                    Name = ReadString(provider.Value, "name") ?? provider.Name,
+                    Api = ReadString(provider.Value, "api"),
+                    Doc = ReadString(provider.Value, "doc"),
+                    Npm = ReadString(provider.Value, "npm"),
+                    EnvJson = ReadStringArray(provider.Value, "env"),
+                    ModelCount = modelCount,
+                    SyncedAt = now
+                });
             }
 
             using var scope = scopeFactory.CreateScope();
@@ -154,6 +169,11 @@ public sealed class CatalogSyncService(
             var existing = await db.CatalogModels.ToListAsync(ct);
             db.CatalogModels.RemoveRange(existing);
             db.CatalogModels.AddRange(parsed);
+
+            var existingProviders = await db.CatalogProviders.ToListAsync(ct);
+            db.CatalogProviders.RemoveRange(existingProviders);
+            db.CatalogProviders.AddRange(parsedProviders);
+
             await db.SaveChangesAsync(ct);
 
             LastSyncedAt = now;
@@ -193,6 +213,22 @@ public sealed class CatalogSyncService(
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+
+    private static string? ReadStringArray(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var items = value.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .ToArray();
+
+        return items.Length == 0 ? null : JsonSerializer.Serialize(items);
+    }
 
     private static bool ReadBool(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) &&

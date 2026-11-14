@@ -4,6 +4,7 @@ public sealed class Team
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
 }
 
@@ -12,6 +13,7 @@ public sealed class App
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = string.Empty;
     public Guid? TeamId { get; set; }
+    public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
 }
 

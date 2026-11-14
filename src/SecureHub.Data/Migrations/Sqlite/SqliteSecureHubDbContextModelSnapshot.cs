@@ -26,6 +26,9 @@ namespace SecureHub.Data.Migrations.Sqlite
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -410,6 +413,43 @@ namespace SecureHub.Data.Migrations.Sqlite
                     b.HasIndex("ProviderKey");
 
                     b.ToTable("CatalogModels");
+                });
+
+            modelBuilder.Entity("SecureHub.Core.Domain.CatalogProvider", b =>
+                {
+                    b.Property<string>("ProviderKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Api")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Doc")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EnvJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ModelCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Npm")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SyncedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ProviderKey");
+
+                    b.ToTable("CatalogProviders");
                 });
 
             modelBuilder.Entity("SecureHub.Core.Domain.ContentBlob", b =>
@@ -918,12 +958,18 @@ namespace SecureHub.Data.Migrations.Sqlite
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
 
                     b.ToTable("Teams");
                 });

@@ -1,0 +1,413 @@
+export const zhCN = {
+  app: { name: 'Secure Hub', tagline: '企业 AI 网关', console: '治理控制台', local: '本地环境' },
+  nav: {
+    admin: '管理端', me: '我的工作台', workspace: '个人工作台', assistant: '审计助手',
+    overview: '总览', providers: '供应商', catalog: '模型目录', routing: '模型路由',
+    keys: '虚拟密钥', policies: '安全策略', budgets: '用量与预算', audit: '审计日志',
+    organization: '组织管理',
+    models: '可用模型', logout: '退出登录', management: '企业管理', personal: '个人空间',
+    account: '账号与安全', main: '主导航', open: '打开导航', close: '关闭导航'
+  },
+  login: {
+    eyebrow: '企业级 AI 治理入口', title: '让每一次 AI 调用，都安全、可控、可审计。',
+    subtitle: '统一接入企业与个人模型供应商，在同一个控制平面管理路由、成本、安全策略与审计证据。',
+    featureOne: '敏感信息识别与实时脱敏', featureTwo: '企业密钥与个人 BYOK 统一治理', featureThree: '链式哈希保护每一条审计记录',
+    signInTitle: '欢迎回来', signInSubtitle: '登录 Secure Hub 控制台', userName: '用户名', password: '密码',
+    totpCode: '动态验证码', totpHint: '你的账号已启用两步验证，请输入验证器中的 6 位动态码。',
+    submit: '登录控制台', signingIn: '正在登录…', failed: '用户名或密码错误', useTotp: '使用两步验证码', footer: '仅限授权用户访问 · 所有操作将被审计'
+  },
+  common: {
+    create: '新建', save: '保存', cancel: '取消', refresh: '刷新', copy: '复制', copied: '已复制',
+    loading: '加载中…', empty: '暂无数据', actions: '操作', name: '名称', alias: '别名', provider: '供应商',
+    baseUrl: '接口地址', apiKey: 'API Key', models: '模型', createdAt: '创建时间', language: '语言',
+    retry: '重试', working: '处理中…', secretReadyTitle: '密钥已创建', copySecret: '复制密钥', secretSaved: '我已保存',
+    search: '搜索', close: '关闭', all: '全部', enabled: '已启用', disabled: '已停用', status: '状态',
+    viewDetails: '查看详情', sync: '同步', learnMore: '了解更多', optional: '可选', required: '必填',
+    active: '正常', revoked: '已吊销', unknown: '未知', notAvailable: '暂无', results: '{{count}} 条结果',
+    showAll: '查看全部', today: '今天', last7Days: '近 7 天', last30Days: '近 30 天', configure: '配置',
+    rowsPerPage: '每页行数', pageRange: '{{from}}–{{to}} / {{count}}', firstPage: '首页', lastPage: '末页', nextPage: '下一页', previousPage: '上一页',
+    enabledShort: '启用', view: '查看', download: '下载', back: '返回', add: '添加', remove: '移除', next: '下一步'
+  },
+  dashboard: {
+    eyebrow: '运行总览', title: 'AI 流量治理，一屏掌握', description: '查看近 7 天企业调用、成本、安全拦截与最新审计动态。',
+    requests: '网关请求', tokens: '输入 Token', blocked: '安全拦截', personalBilling: '个人账请求',
+    vsProviders: '{{active}} / {{total}} 个供应商启用', acrossModels: '覆盖 {{count}} 个模型', blockRate: '占全部事件 {{value}}%',
+    billingSplit: '企业账 {{org}} · 个人账 {{user}}', activity: '调用活动', activityHint: '近 7 天审计事件分布',
+    billing: '计费归属', billingHint: '按请求数统计', recent: '最新审计', recentHint: '关键路由与安全事件实时留痕',
+    security: '安全运行状态', securityHint: '审计链与策略快照', verified: '校验审计链', noData: '还没有调用数据',
+    noDataHint: '创建供应商并签发密钥后，这里会展示调用趋势。', healthy: '网关运行正常', requestUnit: '次请求'
+  },
+  providers: {
+    title: '供应商', description: '集中接入企业模型服务，管理接口地址、凭据和上游模型。凭据在服务端加密保存。',
+    add: '添加企业供应商', listTitle: '企业供应商', search: '搜索别名、供应商或接口地址…', empty: '尚未接入供应商',
+    emptyHint: '添加第一个供应商，开始统一治理企业 AI 流量。', connectedModels: '{{count}} 个上游模型',
+    createTitle: '接入企业供应商', createHint: '保存后可通过 org/<别名>/<模型> 调用。',
+    presetCustom: '自定义 OpenAI 兼容接口', selectPreset: '供应商类型', apiKeyHint: '仅用于加密保存，创建后无法在控制台查看。',
+    modelsHint: '使用英文逗号分隔，例如 gpt-4o, gpt-4o-mini', aliasHint: '全局唯一，将出现在完整模型 ID 中。',
+    created: '供应商已接入', baseUrlHint: '需包含 /v1，例如 https://api.openai.com/v1'
+  },
+  catalog: {
+    title: '模型目录', description: '检索 models.dev 同步的模型能力、上下文窗口与价格，为接入和路由提供依据。',
+    sync: '同步目录', syncing: '正在同步…', search: '搜索模型、系列或供应商…', allProviders: '全部供应商',
+    model: '模型', capabilities: '能力', context: '上下文', inputPrice: '输入价格 / M', outputPrice: '输出价格 / M',
+    tools: '工具调用', reasoning: '推理', synced: '同步时间', empty: '没有匹配的模型', emptyHint: '调整搜索条件，或手动同步最新模型目录。',
+    syncSuccess: '已同步 {{providers}} 个供应商的 {{models}} 个模型', priceNote: '价格单位为美元，实际成本以供应商账单为准。'
+  },
+  routing: {
+    title: '模型路由', description: '将多个上游模型编入具名路由组，通过优先级和权重控制实际流量去向。',
+    create: '配置路由组', empty: '尚未配置路由组', emptyHint: '创建路由组，让同一个模型入口具备故障转移与分流能力。',
+    groupName: '路由组名称', strategy: '路由策略', crossScope: '允许跨企业/个人范围', members: '路由成员',
+    addMember: '添加成员', upstreamModel: '上游模型', priority: '优先级', weight: '权重', memberState: '状态',
+    automatic: '自动分组', manual: '手动分组', saveHint: '保存会替换同名路由组的全部成员。', saved: '路由组已保存',
+    selectProvider: '选择供应商', noMembers: '至少需要一个启用的路由成员'
+  },
+  keys: {
+    title: '虚拟密钥', description: '为应用签发统一格式的访问密钥。平台只保存哈希，完整密钥仅在创建时显示一次。',
+    create: '签发应用密钥', search: '搜索名称、Key ID 或前缀…', empty: '尚未签发应用密钥', emptyHint: '创建密钥后，应用即可通过 OpenAI 兼容接口访问网关。',
+    keyId: 'Key ID', prefix: '密钥前缀', owner: '归属', ownerType: '归属类型', ownerId: '归属 ID',
+    organization: '企业应用', user: '个人用户', scopes: '权限范围', displayNameHint: '例如：生产环境客服机器人',
+    createTitle: '签发应用密钥', createHint: '默认授予 chat:write 与 models:read。', revoke: '吊销密钥',
+    revokeTitle: '确认吊销这个密钥？', revokeHint: '使用“{{name}}”的应用将立即无法访问网关。此操作不可撤销。',
+    revokedSuccess: '密钥已吊销', integration: '快速接入', integrationHint: '使用完整模型 ID，将请求发送到本网关。'
+  },
+  policies: {
+    title: '安全策略', description: '以版本化规则控制敏感信息检测、阻断、脱敏与告警，发布前可先试运行评估影响。',
+    publish: '发布新版本', dryRun: '试运行', snapshot: '查看快照', empty: '尚未配置安全策略',
+    emptyHint: '创建第一条策略，开始保护经过网关的敏感数据。', policyKey: '策略标识', detector: '检测器',
+    action: '命中动作', priority: '优先级', rollout: '灰度比例', onError: '检测异常时', changeReason: '变更说明',
+    activeVersion: '当前版本', versions: '版本历史', condition: '触发条件', block: '阻断', redact: '脱敏', alert: '仅告警',
+    publishTitle: '发布安全策略', publishHint: '每次发布都会生成不可变的新版本，可随时激活历史版本完成回滚。',
+    dryRunTitle: '试运行结果', sampled: '采样事件', affected: '预计影响', confidence: '置信度',
+    activate: '激活此版本', activateTitle: '激活版本 v{{version}}？', activateHint: '激活后，网关会立即重载策略快照。',
+    published: '策略 v{{version}} 已发布', activated: '已激活策略 v{{version}}', snapshotCount: '{{count}} 条编译策略',
+    snapshotOk: '策略快照已加载', snapshotEmpty: '当前没有生效策略', reason: '变更原因'
+  },
+  usage: {
+    title: '用量与预算', description: '查看近 7 天模型用量与计费归属，并按日、周、月设置 Token 或成本上限。',
+    totalRequests: '总请求数', totalTokens: '总 Token', totalCost: '估算成本', personalRequests: '个人账请求',
+    usageByModel: '模型用量', usageHint: '按请求数排序，仅统计近 7 天', requests: '请求', input: '输入 Token', output: '输出 Token',
+    cost: '成本', billingOwner: '计费归属', budgets: '预算与配额', budgetsHint: '达到上限后，后续请求会被拒绝并记录审计。',
+    addBudget: '设置预算', subject: '预算主体', period: '周期', tokenLimit: 'Token 上限', costLimit: '成本上限（USD）',
+    day: '每日', week: '每周', month: '每月', used: '已使用', remaining: '剩余', unlimited: '未设上限',
+    saved: '预算已保存', org: '整个组织', team: '团队', app: '应用', subjectIdHint: '团队或应用预算需要填写对应 ID；组织预算留空。'
+  },
+  audit: {
+    title: '审计日志', description: '检索不可篡改的治理事件，核验证据链、导出合规记录并处理误报申诉。',
+    export: '导出 NDJSON', verify: '校验审计链', disputes: '申诉记录', searchEvent: '事件类型', allEvents: '全部事件',
+    from: '开始日期', to: '结束日期', appId: '应用 ID', apply: '应用筛选', reset: '重置', details: '事件详情',
+    sequence: '序号', time: '时间', event: '事件', action: '动作', actor: '主体', model: '模型', tokens: 'Token',
+    requestId: '请求 ID', reason: '原因代码', severity: '级别', hash: '链式哈希', metadata: '原始技术元数据',
+    rawMetadataHint: '以下字段名与机器标识用于检索、导出和链校验，不会随界面语言改变。',
+    tokensInOut: 'Token（输入 / 输出）', tokenDetail: '输入 {{input}} · 输出 {{output}}', createdBy: '发起人', noNote: '未填写补充说明',
+    dispute: '发起误报申诉', disputeType: '申诉类型', disputeNote: '补充说明', disputeHint: '申诉会独立追加记录，不会修改原审计事件。',
+    disputeSubmitted: '申诉已提交', falsePositive: '误报', other: '其他', exportHint: '按当前日期范围导出，最多 10,000 条。',
+    chainOk: '审计链完整，已校验 {{count}} 条', chainBroken: '审计链在序号 {{seq}} 处断裂',
+    empty: '没有匹配的审计事件', emptyHint: '调整筛选条件或时间范围后重试。', disputeList: '误报申诉记录',
+    disputeListHint: '申诉独立存储，保留原始审计证据。', resolved: '已解决', unresolved: '待处理', noDisputes: '暂无申诉记录'
+  },
+  me: {
+    title: '个人工作台', description: '管理你的模型接入、个人密钥与近 30 天用量。个人流量同样纳入企业安全审计。',
+    usage: '我的用量', providers: '我的供应商', keys: '我的密钥', models: '可用模型', overview: '工作台总览',
+    modelsHint: '使用个人虚拟密钥查看当前可访问的完整模型 ID。', byokHint: '填入自己的供应商 Key，费用由你承担，调用仍会被企业安全策略检查并强制审计。',
+    createByok: '接入我的供应商', createMyKey: '生成个人密钥', billingOrg: '企业账', billingUser: '个人账',
+    usageEmpty: '近 30 天还没有个人调用', providerEmpty: '还没有个人供应商', keyEmpty: '还没有个人密钥',
+    addFirst: '接入第一个供应商', createFirst: '生成第一个密钥', quickStart: '开发接入', quickStartHint: '复制配置到你的 OpenAI 兼容应用。',
+    keyRequired: '需要个人密钥', keyRequiredHint: '先生成一个个人密钥，再查询可用模型。', selectModel: '选择模型以生成调用示例',
+    personalDisclosure: '个人供应商的正文与元数据会按企业要求强制审计，不随全局正文留存开关降级。'
+  },
+  assistant: {
+    title: '审计助手', hint: '用自然语言调查审计、成本与路由；所有结论都应附可核验的证据。',
+    sessions: '历史会话', newSession: '新会话', welcome: '今天想调查什么？',
+    welcomeHint: '选择一个问题开始，或输入你自己的审计调查任务。',
+    promptOne: '最近 7 天有多少请求被安全护栏拦截？', promptTwo: '近 7 天各模型的 Token 用量和成本如何？', promptThree: '当前网关有哪些可用模型？',
+    inputPlaceholder: '输入审计问题…', inputHint: 'Enter 发送 · Shift+Enter 换行 · 仅使用只读工具',
+    send: '发送', stop: '停止生成', thinking: '正在检索审计证据…', emptyAnswer: '模型未返回内容，请换个问法。',
+    evidenceHint: '证据 ID，可在审计日志中检索', evidence: '证据', tools: '工具调用', readonly: '只读模式',
+    deleteTitle: '删除这个会话？', deleteHint: '会话历史将永久删除，审计事件本身不受影响。',
+    emptySessions: '暂无历史会话', poweredBy: '由网关审计数据驱动'
+  },
+  account: {
+    title: '账号与安全', signedInAs: '当前账号', roles: '角色', team: '团队', totp: '两步验证（TOTP）',
+    totpHint: '启用后，登录时除密码外还需输入验证器动态码。', enable: '设置两步验证', secret: '密钥',
+    otpauth: '验证器 URI', code: '6 位动态码', activate: '验证并启用', activated: '两步验证已启用',
+    role0: '平台管理员', role1: '安全管理员', role2: '团队负责人', role3: '开发者', role4: '审计员', role5: '员工'
+  },
+  auditEvent: {
+    auth_succeeded: '登录成功', auth_failed: '认证失败', key_created: '密钥已签发', key_rotated: '密钥已轮换',
+    key_revoked: '密钥已吊销', access_denied: '访问被拒绝', guardrail_blocked: '安全护栏已拦截',
+    guardrail_redacted: '敏感信息已脱敏', guardrail_alert: '安全护栏告警', guardrail_error: '护栏检测异常',
+    policy_created: '策略已创建', policy_updated: '策略已更新', policy_activated: '策略版本已激活',
+    route_failover: '路由已故障转移', route_selected: '模型路由已选择', route_denied: '路由请求被拒绝',
+    quota_exceeded: '配额已超限', compression_applied: '内容压缩已应用', compression_rolled_back: '内容压缩已回退',
+    content_viewed: '审计正文已查看', content_write_failed: '审计正文写入失败', data_exported: '审计数据已导出',
+    provider_created: '企业供应商已接入', provider_credential_updated: '供应商凭据已更新', catalog_synced: '模型目录已同步',
+    byok_enabled: '个人供应商已接入', assistant_tool_invoked: '助手只读工具已调用',
+    assistant_session_started: '助手会话已创建', assistant_answer_returned: '助手回答已返回',
+    content_restored: '脱敏内容已还原', security_baseline_failed: '安全基线检查失败',
+    user_created: '用户已创建', user_updated: '用户已更新', user_deactivated: '用户已停用',
+    user_password_reset: '用户密码已重置', team_created: '团队已创建', team_updated: '团队已更新',
+    app_created: '应用已创建', app_updated: '应用已更新'
+  },
+  auditReason: {
+    ok: '成功', invalid_api_key: '虚拟密钥无效', insufficient_scope: '密钥权限不足', request_blocked: '请求被安全策略阻断',
+    context_length_exceeded: '上下文长度超限', upstream_timeout: '上游服务超时', upstream_rate_limited: '上游服务限流',
+    capability_unsupported: '模型不支持所需能力', pii_detected: '检测到个人敏感信息', secret_detected: '检测到密钥或凭据',
+    prompt_injection: '检测到提示词注入', quota_exceeded: '配额已用尽', budget_exhausted: '预算已用尽',
+    model_not_entitled: '无权使用该模型', model_not_found: '模型不存在', model_ambiguous: '模型简写存在歧义',
+    key_owner_mismatch: '密钥归属不匹配', byok_disabled: '个人供应商功能已停用', byok_not_configured: '未配置个人供应商',
+    provider_not_allowed: '供应商不在允许列表', detector_timeout: '检测器执行超时',
+    compression_rolled_back: '压缩完整性校验失败，已回退', all_candidates_failed: '所有候选上游均调用失败',
+    content_not_found: '审计正文不存在', content_expired: '审计正文已过期', content_read_disabled: '审计正文读取未开启',
+    session_not_found: '会话不存在'
+  },
+  auditValue: {
+    action: { allow: '允许', block: '阻断', redact: '脱敏', alert: '告警', deny: '拒绝', error: '错误', ok: '成功' },
+    severity: { info: '信息', warning: '警告', error: '错误', critical: '严重', debug: '调试' },
+    actorType: { user: '用户', app: '应用', application: '应用', system: '系统', virtualKey: '虚拟密钥', assistant: '审计助手', unknown: '未知主体' },
+    billing: { org: '企业账', user: '个人账' },
+    disputeType: { false_positive: '误报', other: '其他' }
+  },
+  table: { source: '来源', billing: '计费', modelId: '模型 ID', quota: '额度' },
+  org: {
+    title: '组织管理', description: '管理控制台用户、角色、团队与应用归属；停用会立即撤销该用户的登录会话。',
+    users: '用户', teams: '团队', apps: '应用', search: '搜索名称、用户名或团队…',
+    addUser: '添加用户', editUser: '编辑用户', addTeam: '新建团队', editTeam: '编辑团队', addApp: '新建应用', editApp: '编辑应用',
+    userCreated: '用户已创建', userUpdated: '用户已更新', teamCreated: '团队已创建', teamUpdated: '团队已更新',
+    appCreated: '应用已创建', appUpdated: '应用已更新', passwordReset: '密码已重置，相关会话已撤销',
+    resetPassword: '重置密码', resetPasswordHint: '重置 {{name}} 的密码后，该用户所有登录会话会立即失效。',
+    passwordHint: '至少 12 个字符；不会以任何形式回显。', userNameImmutable: '用户名创建后不可修改',
+    noTeam: '不归属团队', enabled: '已启用', notEnabled: '未启用',
+    emptyUsers: '还没有用户', emptyUsersHint: '添加用户并分配角色后，他们才能登录控制台。',
+    emptyTeams: '还没有团队', emptyTeamsHint: '团队用于隔离应用归属与预算范围。',
+    emptyApps: '还没有应用', emptyAppsHint: '应用用于签发虚拟密钥与统计调用。',
+    deactivationNote: '为保证审计可追溯，用户、团队和应用采用停用而不是删除；被停用的用户会立即失去控制台访问。'
+  },
+  onboarding: {
+    titleAdmin: '从 models.dev 接入企业供应商',
+    titlePersonal: '从 models.dev 接入个人供应商',
+    stepProvider: '选择供应商', stepModels: '选择模型', stepCredentials: '填写凭据',
+    providerHint: '供应商与模型来自 models.dev 目录。选择供应商后，只展示该供应商的真实模型与价格。',
+    searchProvider: '搜索供应商名称或标识…', modelCount: '{{count}} 个模型', needsEndpoint: '需填端点',
+    noProviders: '没有匹配的供应商，请先同步 models.dev 目录。',
+    searchModel: '搜索模型或系列…', selectedCount: '已选 {{selected}} / {{total}} 个模型', selectAll: '全选当前结果', clear: '清空',
+    inPrice: '输入', outPrice: '输出', modelSummary: '将接入 {{count}} 个模型',
+    endpointRequired: 'models.dev 未提供该供应商的接口地址，请填写 OpenAI 兼容端点。',
+    endpointFromCatalog: '已根据 models.dev 自动填充；如有私有部署可修改。',
+    envHint: '该供应商通常使用环境变量：{{names}}（仅作提示，不会写入浏览器存储）',
+    credentialNote: 'API Key 只会加密保存在 Secure Hub 服务端，用于你填写的那一个供应商。',
+    connect: '确认接入',
+    catalogSourceNote: '目录来自 models.dev，只包含模型能力、上下文与公开价格；接口地址在目录提供时自动带出。'
+  },
+  admin: {
+    overviewHint: '企业调用、成本与拦截概览', createProvider: '添加企业供应商', createKey: '签发应用密钥',
+    auditHint: '按时间范围检索（默认近 7 天）', verifyChain: '校验审计链', chainOk: '审计链完整，已校验 {{count}} 条',
+    chainBroken: '审计链在序号 {{seq}} 处断裂', keyOnce: '完整密钥只显示这一次。关闭前请复制并妥善保存。'
+  }
+};
+
+export const en = {
+  app: { name: 'Secure Hub', tagline: 'Enterprise AI Gateway', console: 'Governance console', local: 'Local environment' },
+  nav: {
+    admin: 'Admin', me: 'My Workspace', workspace: 'My workspace', assistant: 'Audit assistant',
+    overview: 'Overview', providers: 'Providers', catalog: 'Model catalog', routing: 'Model routing',
+    keys: 'Virtual keys', policies: 'Security policies', budgets: 'Usage & budgets', audit: 'Audit log',
+    organization: 'Organization',
+    models: 'Available models', logout: 'Sign out', management: 'MANAGEMENT', personal: 'PERSONAL',
+    account: 'Account & security', main: 'Main navigation', open: 'Open navigation', close: 'Close navigation'
+  },
+  login: {
+    eyebrow: 'ENTERPRISE AI GOVERNANCE', title: 'Every AI call. Secure, governed, and auditable.',
+    subtitle: 'Connect enterprise and personal model providers. Manage routing, cost, security policies, and audit evidence from one control plane.',
+    featureOne: 'Detect and redact sensitive data in real time', featureTwo: 'Govern enterprise keys and personal BYOK together', featureThree: 'Protect every audit event with hash chaining',
+    signInTitle: 'Welcome back', signInSubtitle: 'Sign in to your Secure Hub console', userName: 'User name', password: 'Password',
+    totpCode: 'Authenticator code', totpHint: 'Two-step verification is enabled. Enter the 6-digit code from your authenticator.',
+    submit: 'Sign in to console', signingIn: 'Signing in…', failed: 'Invalid user name or password', useTotp: 'Use an authenticator code', footer: 'Authorized users only · All activity is audited'
+  },
+  common: {
+    create: 'Create', save: 'Save', cancel: 'Cancel', refresh: 'Refresh', copy: 'Copy', copied: 'Copied',
+    loading: 'Loading…', empty: 'No data', actions: 'Actions', name: 'Name', alias: 'Alias', provider: 'Provider',
+    baseUrl: 'Base URL', apiKey: 'API key', models: 'Models', createdAt: 'Created', language: 'Language',
+    retry: 'Retry', working: 'Working…', secretReadyTitle: 'Your key is ready', copySecret: 'Copy key', secretSaved: 'I saved my key',
+    search: 'Search', close: 'Close', all: 'All', enabled: 'Enabled', disabled: 'Disabled', status: 'Status',
+    viewDetails: 'View details', sync: 'Sync', learnMore: 'Learn more', optional: 'Optional', required: 'Required',
+    active: 'Active', revoked: 'Revoked', unknown: 'Unknown', notAvailable: 'N/A', results: '{{count}} results',
+    showAll: 'View all', today: 'Today', last7Days: 'Last 7 days', last30Days: 'Last 30 days', configure: 'Configure',
+    rowsPerPage: 'Rows per page', pageRange: '{{from}}–{{to}} of {{count}}', firstPage: 'First page', lastPage: 'Last page', nextPage: 'Next page', previousPage: 'Previous page',
+    enabledShort: 'Enabled', view: 'View', download: 'Download', back: 'Back', add: 'Add', remove: 'Remove', next: 'Next'
+  },
+  dashboard: {
+    eyebrow: 'OPERATIONS OVERVIEW', title: 'AI traffic governance at a glance', description: 'Monitor enterprise usage, cost, security blocks, and audit activity over the last 7 days.',
+    requests: 'Gateway requests', tokens: 'Input tokens', blocked: 'Security blocks', personalBilling: 'Personal-billing requests',
+    vsProviders: '{{active}} of {{total}} providers enabled', acrossModels: 'Across {{count}} models', blockRate: '{{value}}% of all events',
+    billingSplit: 'Org {{org}} · Personal {{user}}', activity: 'Call activity', activityHint: 'Audit events over the last 7 days',
+    billing: 'Billing ownership', billingHint: 'Share by request count', recent: 'Recent audit activity', recentHint: 'Routing and security events with immutable evidence',
+    security: 'Security posture', securityHint: 'Audit chain and policy snapshot', verified: 'Verify audit chain', noData: 'No traffic yet',
+    noDataHint: 'Connect a provider and issue a key to see activity here.', healthy: 'Gateway is operational', requestUnit: 'requests'
+  },
+  providers: {
+    title: 'Providers', description: 'Connect enterprise model services and manage endpoints, encrypted credentials, and upstream models.',
+    add: 'Add enterprise provider', listTitle: 'Enterprise providers', search: 'Search alias, provider, or endpoint…', empty: 'No providers connected',
+    emptyHint: 'Connect your first provider to start governing enterprise AI traffic.', connectedModels: '{{count}} upstream models',
+    createTitle: 'Connect enterprise provider', createHint: 'Call it through org/<alias>/<model> after saving.',
+    presetCustom: 'Custom OpenAI-compatible endpoint', selectPreset: 'Provider type', apiKeyHint: 'Encrypted on the server and never visible after creation.',
+    modelsHint: 'Comma-separated, for example gpt-4o, gpt-4o-mini', aliasHint: 'Globally unique and used in the fully qualified model ID.',
+    created: 'Provider connected', baseUrlHint: 'Include /v1, for example https://api.openai.com/v1'
+  },
+  catalog: {
+    title: 'Model catalog', description: 'Search capabilities, context windows, and prices synced from models.dev to guide provider and routing decisions.',
+    sync: 'Sync catalog', syncing: 'Syncing…', search: 'Search model, family, or provider…', allProviders: 'All providers',
+    model: 'Model', capabilities: 'Capabilities', context: 'Context', inputPrice: 'Input / M', outputPrice: 'Output / M',
+    tools: 'Tools', reasoning: 'Reasoning', synced: 'Synced', empty: 'No matching models', emptyHint: 'Change your filters or sync the latest catalog.',
+    syncSuccess: 'Synced {{models}} models across {{providers}} providers', priceNote: 'Prices are in USD. Your provider invoice remains authoritative.'
+  },
+  routing: {
+    title: 'Model routing', description: 'Group upstream models behind named routes and control traffic with member priority and weight.',
+    create: 'Configure route group', empty: 'No route groups configured', emptyHint: 'Create a route group for failover and weighted traffic distribution.',
+    groupName: 'Route group name', strategy: 'Routing strategy', crossScope: 'Allow cross-scope routing', members: 'Route members',
+    addMember: 'Add member', upstreamModel: 'Upstream model', priority: 'Priority', weight: 'Weight', memberState: 'State',
+    automatic: 'Automatic', manual: 'Manual', saveHint: 'Saving replaces all members of the named route group.', saved: 'Route group saved',
+    selectProvider: 'Select provider', noMembers: 'Add at least one enabled route member'
+  },
+  keys: {
+    title: 'Virtual keys', description: 'Issue standardized gateway keys to applications. Only hashes are stored; full secrets appear once.',
+    create: 'Issue application key', search: 'Search name, key ID, or prefix…', empty: 'No application keys yet', emptyHint: 'Issue a key to connect applications through the OpenAI-compatible API.',
+    keyId: 'Key ID', prefix: 'Key prefix', owner: 'Owner', ownerType: 'Owner type', ownerId: 'Owner ID',
+    organization: 'Organization app', user: 'Personal user', scopes: 'Scopes', displayNameHint: 'For example: Production support bot',
+    createTitle: 'Issue application key', createHint: 'Includes chat:write and models:read by default.', revoke: 'Revoke key',
+    revokeTitle: 'Revoke this key?', revokeHint: 'Applications using “{{name}}” will immediately lose gateway access. This cannot be undone.',
+    revokedSuccess: 'Key revoked', integration: 'Quick start', integrationHint: 'Send requests to this gateway using a fully qualified model ID.'
+  },
+  policies: {
+    title: 'Security policies', description: 'Version sensitive-data detection, blocking, redaction, and alerting rules. Dry-run before publishing.',
+    publish: 'Publish new version', dryRun: 'Dry run', snapshot: 'View snapshot', empty: 'No security policies yet',
+    emptyHint: 'Create your first policy to protect sensitive data flowing through the gateway.', policyKey: 'Policy key', detector: 'Detector',
+    action: 'Action', priority: 'Priority', rollout: 'Rollout %', onError: 'On detector error', changeReason: 'Change reason',
+    activeVersion: 'Active version', versions: 'Version history', condition: 'Conditions', block: 'Block', redact: 'Redact', alert: 'Alert only',
+    publishTitle: 'Publish security policy', publishHint: 'Each publish creates an immutable version. Activate a previous version to roll back.',
+    dryRunTitle: 'Dry-run result', sampled: 'Sampled events', affected: 'Estimated affected', confidence: 'Confidence',
+    activate: 'Activate version', activateTitle: 'Activate version v{{version}}?', activateHint: 'The gateway will immediately reload its compiled policy snapshot.',
+    published: 'Policy v{{version}} published', activated: 'Policy v{{version}} activated', snapshotCount: '{{count}} compiled policies',
+    snapshotOk: 'Policy snapshot loaded', snapshotEmpty: 'No active policies', reason: 'Change reason'
+  },
+  usage: {
+    title: 'Usage & budgets', description: 'Review model usage and billing ownership for the last 7 days. Set daily, weekly, or monthly token and cost limits.',
+    totalRequests: 'Total requests', totalTokens: 'Total tokens', totalCost: 'Estimated cost', personalRequests: 'Personal-billing requests',
+    usageByModel: 'Usage by model', usageHint: 'Sorted by requests for the last 7 days', requests: 'Requests', input: 'Input tokens', output: 'Output tokens',
+    cost: 'Cost', billingOwner: 'Billing owner', budgets: 'Budgets & quotas', budgetsHint: 'Requests beyond a limit are rejected and audited.',
+    addBudget: 'Set budget', subject: 'Budget subject', period: 'Period', tokenLimit: 'Token limit', costLimit: 'Cost limit (USD)',
+    day: 'Daily', week: 'Weekly', month: 'Monthly', used: 'Used', remaining: 'Remaining', unlimited: 'No limit',
+    saved: 'Budget saved', org: 'Entire organization', team: 'Team', app: 'Application', subjectIdHint: 'Required for team or app budgets; leave empty for organization budgets.'
+  },
+  audit: {
+    title: 'Audit log', description: 'Search immutable governance events, verify the evidence chain, export compliance records, and handle disputes.',
+    export: 'Export NDJSON', verify: 'Verify audit chain', disputes: 'Disputes', searchEvent: 'Event type', allEvents: 'All events',
+    from: 'From date', to: 'To date', appId: 'Application ID', apply: 'Apply filters', reset: 'Reset', details: 'Event details',
+    sequence: 'Sequence', time: 'Time', event: 'Event', action: 'Action', actor: 'Actor', model: 'Model', tokens: 'Tokens',
+    requestId: 'Request ID', reason: 'Reason code', severity: 'Severity', hash: 'Chain hash', metadata: 'Raw technical metadata',
+    rawMetadataHint: 'Field names and machine identifiers are preserved for search, export, and chain verification across UI languages.',
+    tokensInOut: 'Tokens (in / out)', tokenDetail: '{{input}} in · {{output}} out', createdBy: 'Created by', noNote: 'No additional context provided',
+    dispute: 'Report false positive', disputeType: 'Dispute type', disputeNote: 'Additional context', disputeHint: 'A dispute is appended separately and never changes the original audit event.',
+    disputeSubmitted: 'Dispute submitted', falsePositive: 'False positive', other: 'Other', exportHint: 'Exports the selected date range, up to 10,000 events.',
+    chainOk: 'Audit chain intact. {{count}} events verified.', chainBroken: 'Audit chain broken at sequence {{seq}}',
+    empty: 'No matching audit events', emptyHint: 'Change the filters or date range and try again.', disputeList: 'False-positive disputes',
+    disputeListHint: 'Disputes are stored separately to preserve original evidence.', resolved: 'Resolved', unresolved: 'Open', noDisputes: 'No disputes yet'
+  },
+  me: {
+    title: 'My workspace', description: 'Manage personal providers, keys, and the last 30 days of usage. Personal traffic follows the same enterprise audit controls.',
+    usage: 'My usage', providers: 'My providers', keys: 'My keys', models: 'Available models', overview: 'Workspace overview',
+    modelsHint: 'Use a personal virtual key to inspect fully qualified model IDs currently available to you.', byokHint: 'Use your own provider key. You pay the provider, while gateway security checks and mandatory audit still apply.',
+    createByok: 'Connect my provider', createMyKey: 'Create personal key', billingOrg: 'Org', billingUser: 'Personal',
+    usageEmpty: 'No personal usage in the last 30 days', providerEmpty: 'No personal providers yet', keyEmpty: 'No personal keys yet',
+    addFirst: 'Connect your first provider', createFirst: 'Create your first key', quickStart: 'Developer quick start', quickStartHint: 'Copy this configuration into your OpenAI-compatible application.',
+    keyRequired: 'A personal key is required', keyRequiredHint: 'Create a personal key first, then query your available models.', selectModel: 'Select a model to generate a request example',
+    personalDisclosure: 'Personal-provider content and metadata are always audited as required by enterprise policy, independent of global content retention settings.'
+  },
+  assistant: {
+    title: 'Audit assistant', hint: 'Investigate audit, cost, and routing in natural language, with verifiable evidence for every conclusion.',
+    sessions: 'Session history', newSession: 'New session', welcome: 'What would you like to investigate?',
+    welcomeHint: 'Choose a question below or describe your own audit investigation.',
+    promptOne: 'How many requests were blocked by guardrails in the last 7 days?', promptTwo: 'Compare token usage and cost by model over the last 7 days.', promptThree: 'Which models are currently available through the gateway?',
+    inputPlaceholder: 'Ask an audit question…', inputHint: 'Enter to send · Shift+Enter for a new line · Read-only tools only',
+    send: 'Send', stop: 'Stop generating', thinking: 'Searching audit evidence…', emptyAnswer: 'The model returned nothing. Try rephrasing.',
+    evidenceHint: 'Evidence ID, searchable in the audit log', evidence: 'Evidence', tools: 'Tool calls', readonly: 'Read-only',
+    deleteTitle: 'Delete this session?', deleteHint: 'Session history will be permanently deleted. Audit events are not affected.',
+    emptySessions: 'No previous sessions', poweredBy: 'Grounded in gateway audit data'
+  },
+  account: {
+    title: 'Account & security', signedInAs: 'Signed in as', roles: 'Roles', team: 'Team', totp: 'Two-step verification (TOTP)',
+    totpHint: 'Require an authenticator code in addition to your password when signing in.', enable: 'Set up two-step verification', secret: 'Secret',
+    otpauth: 'Authenticator URI', code: '6-digit authenticator code', activate: 'Verify & enable', activated: 'Two-step verification enabled',
+    role0: 'Platform admin', role1: 'Security admin', role2: 'Team owner', role3: 'Developer', role4: 'Auditor', role5: 'Employee'
+  },
+  auditEvent: {
+    auth_succeeded: 'Sign-in succeeded', auth_failed: 'Authentication failed', key_created: 'Key issued', key_rotated: 'Key rotated',
+    key_revoked: 'Key revoked', access_denied: 'Access denied', guardrail_blocked: 'Blocked by guardrail',
+    guardrail_redacted: 'Sensitive data redacted', guardrail_alert: 'Guardrail alert', guardrail_error: 'Guardrail detector error',
+    policy_created: 'Policy created', policy_updated: 'Policy updated', policy_activated: 'Policy version activated',
+    route_failover: 'Route failed over', route_selected: 'Model route selected', route_denied: 'Route request denied',
+    quota_exceeded: 'Quota exceeded', compression_applied: 'Compression applied', compression_rolled_back: 'Compression rolled back',
+    content_viewed: 'Audit content viewed', content_write_failed: 'Audit content write failed', data_exported: 'Audit data exported',
+    provider_created: 'Enterprise provider connected', provider_credential_updated: 'Provider credential updated', catalog_synced: 'Model catalog synced',
+    byok_enabled: 'Personal provider connected', assistant_tool_invoked: 'Read-only assistant tool invoked',
+    assistant_session_started: 'Assistant session started', assistant_answer_returned: 'Assistant answer returned',
+    content_restored: 'Redacted content restored', security_baseline_failed: 'Security baseline check failed',
+    user_created: 'User created', user_updated: 'User updated', user_deactivated: 'User deactivated',
+    user_password_reset: 'User password reset', team_created: 'Team created', team_updated: 'Team updated',
+    app_created: 'Application created', app_updated: 'Application updated'
+  },
+  auditReason: {
+    ok: 'Success', invalid_api_key: 'Invalid virtual key', insufficient_scope: 'Insufficient key scope', request_blocked: 'Request blocked by security policy',
+    context_length_exceeded: 'Context length exceeded', upstream_timeout: 'Upstream timed out', upstream_rate_limited: 'Upstream rate limited',
+    capability_unsupported: 'Required model capability unsupported', pii_detected: 'Personal sensitive data detected', secret_detected: 'Secret or credential detected',
+    prompt_injection: 'Prompt injection detected', quota_exceeded: 'Quota exhausted', budget_exhausted: 'Budget exhausted',
+    model_not_entitled: 'Model access not granted', model_not_found: 'Model not found', model_ambiguous: 'Model shorthand is ambiguous',
+    key_owner_mismatch: 'Key owner mismatch', byok_disabled: 'Personal providers disabled', byok_not_configured: 'Personal provider not configured',
+    provider_not_allowed: 'Provider is not allowed', detector_timeout: 'Detector timed out',
+    compression_rolled_back: 'Compression integrity check failed; rolled back', all_candidates_failed: 'All upstream candidates failed',
+    content_not_found: 'Audit content not found', content_expired: 'Audit content expired', content_read_disabled: 'Audit content reading is disabled',
+    session_not_found: 'Session not found'
+  },
+  auditValue: {
+    action: { allow: 'Allowed', block: 'Blocked', redact: 'Redacted', alert: 'Alert', deny: 'Denied', error: 'Error', ok: 'Success' },
+    severity: { info: 'Info', warning: 'Warning', error: 'Error', critical: 'Critical', debug: 'Debug' },
+    actorType: { user: 'User', app: 'Application', application: 'Application', system: 'System', virtualKey: 'Virtual key', assistant: 'Audit assistant', unknown: 'Unknown actor' },
+    billing: { org: 'Organization', user: 'Personal' },
+    disputeType: { false_positive: 'False positive', other: 'Other' }
+  },
+  table: { source: 'Source', billing: 'Billing', modelId: 'Model ID', quota: 'Quota' },
+  org: {
+    title: 'Organization', description: 'Manage console users, roles, teams, and application ownership. Deactivation revokes sessions immediately.',
+    users: 'Users', teams: 'Teams', apps: 'Applications', search: 'Search name, user name, or team…',
+    addUser: 'Add user', editUser: 'Edit user', addTeam: 'New team', editTeam: 'Edit team', addApp: 'New application', editApp: 'Edit application',
+    userCreated: 'User created', userUpdated: 'User updated', teamCreated: 'Team created', teamUpdated: 'Team updated',
+    appCreated: 'Application created', appUpdated: 'Application updated', passwordReset: 'Password reset and sessions revoked',
+    resetPassword: 'Reset password', resetPasswordHint: 'Resetting the password for {{name}} immediately signs out all of their sessions.',
+    passwordHint: 'At least 12 characters. It is never returned by the API.', userNameImmutable: 'User name cannot be changed after creation',
+    noTeam: 'No team', enabled: 'Enabled', notEnabled: 'Not enabled',
+    emptyUsers: 'No users yet', emptyUsersHint: 'Add users and assign roles before they can sign in.',
+    emptyTeams: 'No teams yet', emptyTeamsHint: 'Teams scope application ownership and budgets.',
+    emptyApps: 'No applications yet', emptyAppsHint: 'Applications own virtual keys and usage.',
+    deactivationNote: 'Users, teams, and applications are deactivated rather than deleted to preserve audit history; deactivated users lose console access immediately.'
+  },
+  onboarding: {
+    titleAdmin: 'Connect an enterprise provider from models.dev',
+    titlePersonal: 'Connect a personal provider from models.dev',
+    stepProvider: 'Provider', stepModels: 'Models', stepCredentials: 'Credentials',
+    providerHint: 'Providers and models come from the models.dev catalog. After choosing a provider, only its real models and prices are shown.',
+    searchProvider: 'Search provider name or id…', modelCount: '{{count}} models', needsEndpoint: 'Endpoint required',
+    noProviders: 'No matching providers. Sync the models.dev catalog first.',
+    searchModel: 'Search model or family…', selectedCount: '{{selected}} of {{total}} models selected', selectAll: 'Select visible', clear: 'Clear',
+    inPrice: 'In', outPrice: 'Out', modelSummary: '{{count}} models will be connected',
+    endpointRequired: 'models.dev does not provide an endpoint for this provider. Enter an OpenAI-compatible endpoint.',
+    endpointFromCatalog: 'Prefilled from models.dev. Adjust it for private deployments.',
+    envHint: 'This provider typically uses: {{names}} (informational only; never stored in the browser)',
+    credentialNote: 'The API key is encrypted on the Secure Hub server and used only for this provider.',
+    connect: 'Connect provider',
+    catalogSourceNote: 'Catalog data comes from models.dev: capabilities, context, and public prices. Endpoints are prefilled when the catalog provides one.'
+  },
+  admin: {
+    overviewHint: 'Calls, cost, and blocks across the organization', createProvider: 'Add enterprise provider', createKey: 'Issue application key',
+    auditHint: 'Search by time range (last 7 days by default)', verifyChain: 'Verify audit chain', chainOk: 'Audit chain intact, {{count}} events checked',
+    chainBroken: 'Audit chain broken at sequence {{seq}}', keyOnce: 'The full key is shown only once. Copy and store it before closing.'
+  }
+};

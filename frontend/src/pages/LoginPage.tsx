@@ -3,88 +3,142 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
+  Divider,
+  InputAdornment,
   Stack,
   TextField,
   Typography
 } from '@mui/material';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import PinOutlinedIcon from '@mui/icons-material/PinOutlined';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
 import type { Session } from '../types';
+import { BrandLockup } from '../components/Brand';
 
 export default function LoginPage({ onSuccess }: { onSuccess: (session: Session) => void }) {
   const { t } = useTranslation();
   const [userName, setUserName] = useState('admin');
   const [password, setPassword] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+  const [showTotp, setShowTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const result = await api.login(userName, password);
+      const result = await api.login(userName, password, showTotp ? totpCode : undefined);
       onSuccess(result.user);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : String(err);
-      setError(message || t('login.failed'));
+      if (err instanceof ApiError && err.code.toLowerCase().includes('totp')) setShowTotp(true);
+      setError(err instanceof ApiError ? err.message : String(err));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Box
-      minHeight="100vh"
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      bgcolor="background.default"
-      p={2}
-    >
-      <Card sx={{ width: 400 }}>
-        <CardContent sx={{ p: 4 }}>
-          <Stack spacing={1} mb={3}>
-            <Box
-              sx={{
-                width: 44,
-                height: 44,
-                borderRadius: '14px',
-                background: 'linear-gradient(135deg,#6750A4,#9A82DB)'
-              }}
-            />
-            <Typography variant="h1">{t('app.name')}</Typography>
-            <Typography color="text.secondary">{t('login.title')}</Typography>
+    <Box sx={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(480px, 1.1fr) minmax(480px, 0.9fr)' }, bgcolor: 'background.paper' }}>
+      <Box
+        sx={{
+          display: { xs: 'none', lg: 'flex' }, flexDirection: 'column', position: 'relative', overflow: 'hidden',
+          p: { lg: 6, xl: 8 }, color: '#FFF',
+          background: 'radial-gradient(circle at 82% 12%, rgba(99,102,241,0.3), transparent 33%), radial-gradient(circle at 10% 90%, rgba(20,184,166,0.13), transparent 32%), linear-gradient(145deg, #111827 0%, #171B34 52%, #1E1B4B 100%)'
+        }}
+      >
+        <Box sx={{ position: 'absolute', inset: 0, opacity: 0.12, backgroundImage: 'linear-gradient(rgba(255,255,255,.16) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.16) 1px, transparent 1px)', backgroundSize: '64px 64px', maskImage: 'linear-gradient(to bottom right, black, transparent 80%)' }} />
+        <Box sx={{ position: 'relative' }}><BrandLockup inverse subtitle={t('app.tagline')} /></Box>
+        <Stack sx={{ position: 'relative', my: 'auto', maxWidth: 620 }} spacing={3.5}>
+          <Box>
+            <Typography variant="overline" sx={{ color: '#A5B4FC' }}>{t('login.eyebrow')}</Typography>
+            <Typography component="h1" sx={{ fontSize: { lg: '2.6rem', xl: '3.2rem' }, lineHeight: 1.16, fontWeight: 700, letterSpacing: '-0.04em', textWrap: 'balance', mt: 2 }}>
+              {t('login.title')}
+            </Typography>
+            <Typography sx={{ color: 'rgba(226,232,240,0.7)', fontSize: '1rem', lineHeight: 1.8, maxWidth: 560, mt: 2.5 }}>
+              {t('login.subtitle')}
+            </Typography>
+          </Box>
+          <Stack spacing={1.75}>
+            {[t('login.featureOne'), t('login.featureTwo'), t('login.featureThree')].map((feature) => (
+              <Stack direction="row" spacing={1.25} alignItems="center" key={feature}>
+                <CheckCircleOutlineIcon sx={{ color: '#5EEAD4', fontSize: 20 }} />
+                <Typography variant="body2" sx={{ color: 'rgba(239,246,255,0.82)' }}>{feature}</Typography>
+              </Stack>
+            ))}
           </Stack>
+        </Stack>
+        <Typography variant="caption" sx={{ position: 'relative', color: 'rgba(226,232,240,0.4)', letterSpacing: '0.02em' }}>
+          {t('login.footer')}
+        </Typography>
+      </Box>
 
-          <form onSubmit={submit}>
-            <Stack spacing={2}>
-              <TextField
-                label={t('login.userName')}
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                fullWidth
-                autoComplete="username"
-              />
-              <TextField
-                label={t('login.password')}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                fullWidth
-                autoComplete="current-password"
-                autoFocus
-              />
-              {error && <Alert severity="error">{error}</Alert>}
-              <Button type="submit" variant="contained" size="large" disabled={busy}>
-                {t('login.submit')}
-              </Button>
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: { xs: '100vh', lg: 'auto' } }}>
+        <Box sx={{ display: { lg: 'none' }, p: 3 }}><BrandLockup /></Box>
+        <Box sx={{ flex: 1, display: 'grid', placeItems: 'center', p: { xs: 3, sm: 6 } }}>
+          <Box sx={{ width: '100%', maxWidth: 400 }}>
+            <Box component="form" onSubmit={submit} noValidate>
+              <Typography variant="h1" component="h1">{t('login.signInTitle')}</Typography>
+              <Typography variant="body1" color="text.secondary" mt={1} mb={4}>{t('login.signInSubtitle')}</Typography>
+              <Stack spacing={2.25}>
+                <TextField
+                  fullWidth
+                  label={t('login.userName')}
+                  name="username"
+                  value={userName}
+                  onChange={(event) => setUserName(event.target.value)}
+                  autoComplete="username"
+                  spellCheck={false}
+                  slotProps={{ input: { startAdornment: <InputAdornment position="start"><PersonOutlineIcon fontSize="small" /></InputAdornment> } }}
+                />
+                <TextField
+                  fullWidth
+                  label={t('login.password')}
+                  name="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                  autoFocus
+                  slotProps={{ input: { startAdornment: <InputAdornment position="start"><LockOutlinedIcon fontSize="small" /></InputAdornment> } }}
+                />
+                {!showTotp && (
+                  <Button size="small" onClick={() => setShowTotp(true)} sx={{ alignSelf: 'flex-start', px: 0 }}>{t('login.useTotp')}</Button>
+                )}
+                {showTotp && (
+                  <Box>
+                    <Alert severity="info" sx={{ mb: 2 }}>{t('login.totpHint')}</Alert>
+                    <TextField
+                      fullWidth
+                      label={t('login.totpCode')}
+                      name="totpCode"
+                      value={totpCode}
+                      onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                      inputProps={{ inputMode: 'numeric', autoComplete: 'one-time-code', pattern: '[0-9]*' }}
+                      slotProps={{ input: { startAdornment: <InputAdornment position="start"><PinOutlinedIcon fontSize="small" /></InputAdornment> } }}
+                    />
+                  </Box>
+                )}
+                {error && <Alert severity="error" aria-live="polite">{error || t('login.failed')}</Alert>}
+                <Button type="submit" variant="contained" size="large" endIcon={<ArrowForwardIcon />} disabled={busy || !userName || !password || (showTotp && totpCode.length !== 6)} sx={{ minHeight: 46 }}>
+                  {busy ? t('login.signingIn') : t('login.submit')}
+                </Button>
+              </Stack>
+            </Box>
+            <Divider sx={{ my: 4 }} />
+            <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'success.main' }} />
+              <Typography variant="caption" color="text.secondary">{t('app.name')} · 127.0.0.1</Typography>
             </Stack>
-          </form>
-        </CardContent>
-      </Card>
+          </Box>
+        </Box>
+        <Typography variant="caption" color="text.secondary" textAlign="center" p={3} display={{ lg: 'none' }}>{t('login.footer')}</Typography>
+      </Box>
     </Box>
   );
 }

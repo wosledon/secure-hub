@@ -77,13 +77,21 @@ function dispatchFrame(frame: string, handlers: AssistantStreamHandlers) {
 }
 
 export const api = {
-  login: (userName: string, password: string) =>
-    request<{ user: { user_name: string; roles: number[] } }>('/api/auth/login', {
+  login: (userName: string, password: string, totpCode?: string) =>
+    request<{ user: { id: string; user_name: string; roles: number[]; team_id?: string } }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ userName, password })
+      body: JSON.stringify({ userName, password, totpCode })
     }),
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
-  me: () => request<{ user: { user_name: string; roles: number[]; team_id?: string } }>('/api/auth/me'),
+  me: () => request<{ user: { id: string; user_name: string; roles: number[]; team_id?: string } }>('/api/auth/me'),
+  health: () => request<{ status: string; product: string; version: string }>('/health'),
+  enableTotp: () =>
+    request<{ secret: string; otpauth_uri: string; note: string }>('/api/auth/totp/enable', { method: 'POST' }),
+  activateTotp: (code: string) =>
+    request<{ activated: boolean }>('/api/auth/totp/activate', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    }),
 
   providers: () => request<ProviderRow[]>('/api/admin/providers'),
   createProvider: (body: CreateProviderBody) =>
@@ -93,7 +101,7 @@ export const api = {
     }),
 
   keys: () => request<KeyRow[]>('/api/admin/keys'),
-  createKey: (body: { displayName: string; ownerType: 0 | 1; ownerId: string }) =>
+  createKey: (body: { displayName: string; ownerType: 0 | 1; ownerId: string; scopes?: string[] }) =>
     request<{ key: string; key_id: string }>('/api/admin/keys', {
       method: 'POST',
       body: JSON.stringify(body)
@@ -101,10 +109,11 @@ export const api = {
   revokeKey: (id: string) =>
     request<{ ok: boolean }>(`/api/admin/keys/${id}/revoke`, { method: 'POST' }),
 
-  audit: (params?: { from?: string; to?: string; eventType?: string }) => {
+  audit: (params?: { from?: string; to?: string; appId?: string; eventType?: string }) => {
     const search = new URLSearchParams();
     if (params?.from) search.set('from', params.from);
     if (params?.to) search.set('to', params.to);
+    if (params?.appId) search.set('appId', params.appId);
     if (params?.eventType) search.set('eventType', params.eventType);
     const query = search.toString();
     return request<{ count: number; data: AuditRow[] }>(`/api/admin/audit${query ? `?${query}` : ''}`);
@@ -113,6 +122,20 @@ export const api = {
     request<{ ok: boolean; checked_count: number; first_break_sequence: number | null }>(
       '/api/admin/audit/verify'
     ),
+  auditExportUrl: (params?: { from?: string; to?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.from) search.set('from', params.from);
+    if (params?.to) search.set('to', params.to);
+    const query = search.toString();
+    return `/api/admin/audit/export${query ? `?${query}` : ''}`;
+  },
+  disputes: () => request<AuditDisputeRow[]>('/api/admin/audit/disputes'),
+  disputeAudit: (eventId: string, body: { disputeType: string; note?: string }) =>
+    request<{ ok: boolean }>(`/api/admin/audit/${eventId}/dispute`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+  adminUsage: () => request<{ from: string; data: UsageRow[] }>('/api/admin/usage/summary'),
 
   myProviders: () => request<MyProviderRow[]>('/api/me/providers'),
   createMyProvider: (body: CreateProviderBody) =>
@@ -132,6 +155,17 @@ export const api = {
     }),
 
   policies: () => request<PolicyRow[]>('/api/admin/policies'),
+  policySnapshot: () => request<PolicySnapshot>('/api/admin/policies/snapshot'),
+  activatePolicy: (policyKey: string, version: number) =>
+    request<{ policy_key: string; active_version: number; snapshot_reloaded: boolean }>(
+      `/api/admin/policies/${encodeURIComponent(policyKey)}/activate?version=${version}`,
+      { method: 'POST' }
+    ),
+  dryRunPolicy: (body: PublishPolicyBody) =>
+    request<PolicyDryRunResult>('/api/admin/policies/dry-run', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
   publishPolicy: (body: PublishPolicyBody) =>
     request<{ version: number; snapshot_reloaded: boolean }>('/api/admin/policies', {
       method: 'POST',
@@ -143,11 +177,72 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body)
     }),
+  catalog: (params?: { provider?: string; q?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.provider) search.set('provider', params.provider);
+    if (params?.q) search.set('q', params.q);
+    const query = search.toString();
+    return request<CatalogModelRow[]>(`/api/admin/catalog${query ? `?${query}` : ''}`);
+  },
   catalogSync: () =>
-    request<{ ok: boolean; providers: number; models: number; error?: string | null }>(
+    request<{ ok: boolean; providers: number; models: number; error?: string | null; synced_at?: string | null }>(
       '/api/admin/catalog/sync',
       { method: 'POST' }
     ),
+  catalogProviders: (scope: 'admin' | 'me' = 'admin') =>
+    request<CatalogProviderRow[]>(`/api/${scope}/catalog/providers`),
+  catalogProviderModels: (providerKey: string, scope: 'admin' | 'me' = 'admin') =>
+    request<CatalogProviderModel[]>(
+      `/api/${scope}/catalog/providers/${encodeURIComponent(providerKey)}/models`
+    ),
+  createProviderFromCatalog: (body: CreateProviderFromCatalogBody) =>
+    request<{ id: string; alias: string; models: number; scope: string }>(
+      '/api/admin/providers/from-catalog',
+      { method: 'POST', body: JSON.stringify(body) }
+    ),
+  createMyProviderFromCatalog: (body: CreateProviderFromCatalogBody) =>
+    request<{ id: string; alias: string; models: number; scope: string }>(
+      '/api/me/providers/from-catalog',
+      { method: 'POST', body: JSON.stringify(body) }
+    ),
+  orgTeams: () => request<OrgTeamRow[]>('/api/admin/org/teams'),
+  createTeam: (body: { name: string }) =>
+    request<{ id: string; name: string; is_active: boolean }>('/api/admin/org/teams', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+  updateTeam: (id: string, body: { name: string; isActive: boolean }) =>
+    request<{ id: string; name: string; is_active: boolean }>(`/api/admin/org/teams/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body)
+    }),
+  orgApps: () => request<OrgAppRow[]>('/api/admin/org/apps'),
+  createApp: (body: { name: string; teamId?: string | null }) =>
+    request<{ id: string; name: string; team_id?: string | null; is_active: boolean }>('/api/admin/org/apps', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+  updateApp: (id: string, body: { name: string; teamId?: string | null; isActive: boolean }) =>
+    request<{ id: string; name: string; team_id?: string | null; is_active: boolean }>(`/api/admin/org/apps/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body)
+    }),
+  orgUsers: () => request<OrgUserRow[]>('/api/admin/org/users'),
+  createUser: (body: { userName: string; password: string; teamId?: string | null; roles: number[] }) =>
+    request<{ id: string }>('/api/admin/org/users', { method: 'POST', body: JSON.stringify(body) }),
+  updateUser: (id: string, body: { teamId?: string | null; roles: number[]; isActive: boolean }) =>
+    request<{ id: string }>(`/api/admin/org/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  resetUserPassword: (id: string, password: string) =>
+    request<{ ok: boolean; sessions_revoked: boolean }>(`/api/admin/org/users/${id}/password`, {
+      method: 'POST',
+      body: JSON.stringify({ password })
+    }),
+  modelGroups: () => request<ModelGroupRow[]>('/api/admin/model-groups'),
+  upsertModelGroup: (body: UpsertModelGroupBody) =>
+    request<{ id: string; name: string }>('/api/admin/model-groups', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
 
   assistantSessions: () =>
     request<{ sessions: AssistantSessionRow[] }>('/api/assistant/sessions'),
@@ -301,6 +396,7 @@ export interface AuditRow {
 
 export interface UsageRow {
   model: string;
+  billing_owner?: string;
   requests: number;
   input_tokens: number;
   output_tokens: number;
@@ -317,6 +413,146 @@ export interface ModelRow {
   };
 }
 
+export interface PolicySnapshot {
+  count: number;
+  error?: string | null;
+  policies: Array<{
+    policy_key: string;
+    version: number;
+    priority: number;
+    action: string;
+    rollout: number;
+    apps: string[];
+    teams: string[];
+    any: string[];
+    all: string[];
+  }>;
+}
+
+export interface PolicyDryRunResult {
+  sampled_events: number;
+  estimated_affected: number;
+  confidence: string;
+  note: string;
+}
+
+export interface CatalogModelRow {
+  id: string;
+  provider: string;
+  model: string;
+  family?: string | null;
+  supportsTools: boolean;
+  supportsReasoning: boolean;
+  contextWindow: number;
+  maxOutputTokens: number;
+  input_price: number;
+  output_price: number;
+  syncedAt: string;
+}
+
+export interface ModelGroupMember {
+  provider: string;
+  providerId?: string;
+  upstreamModel: string;
+  priority: number;
+  weight: number;
+  state: string;
+  enabled: boolean;
+}
+
+export interface ModelGroupRow {
+  id: string;
+  name: string;
+  isAuto: boolean;
+  allowCrossScope: boolean;
+  strategy: string;
+  members: ModelGroupMember[];
+}
+
+export interface UpsertModelGroupBody {
+  name: string;
+  allowCrossScope: boolean;
+  strategy: string;
+  members: Array<{
+    providerId: string;
+    upstreamModel: string;
+    priority: number;
+    weight: number;
+    enabled: boolean;
+  }>;
+}
+
+export interface AuditDisputeRow {
+  id: string;
+  eventId: string;
+  dispute_type: string;
+  note?: string | null;
+  createdBy: string;
+  createdAt: string;
+  resolvedAt?: string | null;
+}
+
+export interface CatalogProviderRow {
+  provider_key: string;
+  name: string;
+  api?: string | null;
+  doc?: string | null;
+  npm?: string | null;
+  env: string[];
+  model_count: number;
+  syncedAt: string;
+}
+
+export interface CatalogProviderModel {
+  modelId: string;
+  family?: string | null;
+  supports_tools: boolean;
+  supports_reasoning: boolean;
+  supports_structured_output: boolean;
+  context_window: number;
+  max_output_tokens: number;
+  input_price: number;
+  output_price: number;
+}
+
+export interface CreateProviderFromCatalogBody {
+  alias: string;
+  providerKey: string;
+  apiKey: string;
+  models: string[];
+  baseUrl?: string;
+}
+
+export interface OrgTeamRow {
+  id: string;
+  name: string;
+  is_active: boolean;
+  createdAt: string;
+  user_count: number;
+  app_count: number;
+}
+
+export interface OrgAppRow {
+  id: string;
+  name: string;
+  team_id?: string | null;
+  team_name?: string | null;
+  is_active: boolean;
+  createdAt: string;
+  key_count: number;
+}
+
+export interface OrgUserRow {
+  id: string;
+  userName: string;
+  teamId?: string | null;
+  team_name?: string | null;
+  roles: number[];
+  is_active: boolean;
+  createdAt: string;
+  totp_enabled: boolean;
+}
+
 export interface PolicyRow {
   policy_key: string;
   enabled: boolean;
@@ -326,6 +562,9 @@ export interface PolicyRow {
     priority: number;
     whenJson: string;
     thenJson: string;
+    scopeJson?: string;
+    rolloutJson?: string;
+    changeReason?: string;
     onError: string;
     createdAt: string;
   }>;

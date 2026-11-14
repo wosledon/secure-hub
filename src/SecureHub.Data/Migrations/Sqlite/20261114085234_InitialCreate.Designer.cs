@@ -8,10 +8,10 @@ using SecureHub.Data;
 
 #nullable disable
 
-namespace SecureHub.Data.Migrations
+namespace SecureHub.Data.Migrations.Sqlite
 {
-    [DbContext(typeof(SecureHubDbContext))]
-    [Migration("20261114084424_InitialCreate")]
+    [DbContext(typeof(SqliteSecureHubDbContext))]
+    [Migration("20261114085234_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />

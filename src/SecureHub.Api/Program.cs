@@ -26,17 +26,9 @@ builder.Services.Configure<SecureHubOptions>(
 
 builder.Services.AddSingleton<IClock, SystemClock>();
 
-builder.Services.AddSecureHubDbContext(o =>
-{
-    if (string.Equals(hubOptions.Database.Provider, "Postgres", StringComparison.OrdinalIgnoreCase))
-    {
-        o.UseNpgsql(hubOptions.Database.ConnectionString);
-    }
-    else
-    {
-        o.UseSqlite(hubOptions.Database.ConnectionString);
-    }
-});
+builder.Services.AddSecureHubDbContext(
+    string.Equals(hubOptions.Database.Provider, "Postgres", StringComparison.OrdinalIgnoreCase),
+    hubOptions.Database.ConnectionString);
 
 Directory.CreateDirectory(hubOptions.Security.DataDirectory);
 Directory.CreateDirectory(Path.Combine(hubOptions.Security.DataDirectory, "keys"));

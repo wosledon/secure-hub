@@ -14,8 +14,11 @@ public sealed class DateTimeOffsetToUnixMillisecondsConverter()
         value => value.ToUnixTimeMilliseconds(),
         value => DateTimeOffset.FromUnixTimeMilliseconds(value));
 
-public sealed class SecureHubDbContext(DbContextOptions<SecureHubDbContext> options) : DbContext(options)
+public class SecureHubDbContext : DbContext
 {
+    public SecureHubDbContext(DbContextOptions options) : base(options)
+    {
+    }
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<App> Apps => Set<App>();
     public DbSet<User> Users => Set<User>();

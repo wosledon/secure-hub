@@ -140,11 +140,13 @@ export default function AssistantWorkspace() {
 
   const filteredSessions = useMemo(() => rows.filter((row) => row.title.toLowerCase().includes(sessionQuery.trim().toLowerCase())), [rows, sessionQuery]);
   const activeTitle = rows.find((row) => row.id === activeId)?.title ?? t('assistant.newSession');
+  // 写工具只对 SecurityWrite 角色注入；有它就不该再标「只读模式」。
+  const canWrite = tools.some((tool) => !tool.readOnly);
 
   return (
     <Stack spacing={2.5} sx={{ height: 'calc(100vh - 128px)', minHeight: 620 }}>
       <PageHeader title={t('assistant.title')} description={t('assistant.hint')} actions={<>
-        <Chip size="small" color="success" icon={<LockOutlinedIcon />} variant="outlined" label={t('assistant.readonly')} />
+        <Chip size="small" color={canWrite ? 'warning' : 'success'} icon={<LockOutlinedIcon />} variant="outlined" label={canWrite ? t('assistant.readWrite') : t('assistant.readonly')} />
         <Button variant="contained" startIcon={<AddCommentIcon />} onClick={startNew}>{t('assistant.newSession')}</Button>
       </>} />
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
@@ -162,7 +164,7 @@ export default function AssistantWorkspace() {
           </List>
           {filteredSessions.length === 0 && <EmptyState compact title={t('assistant.emptySessions')} />}
           <Divider />
-          <Box p={1.5}><Stack direction="row" spacing={0.75} alignItems="center" mb={1}><HistoryIcon sx={{ fontSize: 15 }} color="action" /><Typography variant="caption" color="text.secondary">{t('assistant.tools')} · {tools.length || 8}</Typography></Stack><Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>{tools.slice(0, 3).map((tool) => <Chip key={tool.name} size="small" variant="outlined" label={tool.name.replaceAll('_', ' ')} sx={{ fontSize: 9, height: 21 }} />)}</Stack></Box>
+          <Box p={1.5}><Stack direction="row" spacing={0.75} alignItems="center" mb={1}><HistoryIcon sx={{ fontSize: 15 }} color="action" /><Typography variant="caption" color="text.secondary">{t('assistant.tools')} · {tools.length || 8}</Typography></Stack><Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>{tools.slice(0, 4).map((tool) => <Chip key={tool.name} size="small" variant="outlined" color={tool.readOnly ? undefined : 'warning'} label={tool.name.replaceAll('_', ' ')} sx={{ fontSize: 9, height: 21 }} />)}</Stack></Box>
         </Card>
 
         <Card sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>

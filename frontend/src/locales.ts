@@ -282,9 +282,9 @@ export const zhCN = {
     sessions: '历史会话', newSession: '新会话', welcome: '今天想调查什么？',
     welcomeHint: '选择一个问题开始，或输入你自己的审计调查任务。',
     promptOne: '最近 7 天有多少请求被安全护栏拦截？', promptTwo: '近 7 天各模型的 Token 用量和成本如何？', promptThree: '当前网关有哪些可用模型？',
-    inputPlaceholder: '输入审计问题…', inputHint: 'Enter 发送 · Shift+Enter 换行 · 仅使用只读工具',
+    inputPlaceholder: '输入审计问题…', inputHint: 'Enter 发送 · Shift+Enter 换行 · 以只读工具为主',
     send: '发送', stop: '停止生成', thinking: '正在检索审计证据…', emptyAnswer: '模型未返回内容，请换个问法。',
-    evidenceHint: '证据 ID，可在审计日志中检索', evidence: '证据', tools: '工具调用', readonly: '只读模式',
+    evidenceHint: '证据 ID，可在审计日志中检索', evidence: '证据', tools: '工具调用', readonly: '只读模式', readWrite: '可创建护栏',
     deleteTitle: '删除这个会话？', deleteHint: '会话历史将永久删除，审计事件本身不受影响。',
     emptySessions: '暂无历史会话', poweredBy: '由网关审计数据驱动'
   },
@@ -703,9 +703,9 @@ export const en = {
     sessions: 'Session history', newSession: 'New session', welcome: 'What would you like to investigate?',
     welcomeHint: 'Choose a question below or describe your own audit investigation.',
     promptOne: 'How many requests were blocked by guardrails in the last 7 days?', promptTwo: 'Compare token usage and cost by model over the last 7 days.', promptThree: 'Which models are currently available through the gateway?',
-    inputPlaceholder: 'Ask an audit question…', inputHint: 'Enter to send · Shift+Enter for a new line · Read-only tools only',
+    inputPlaceholder: 'Ask an audit question…', inputHint: 'Enter to send · Shift+Enter for a new line · Mostly read-only tools',
     send: 'Send', stop: 'Stop generating', thinking: 'Searching audit evidence…', emptyAnswer: 'The model returned nothing. Try rephrasing.',
-    evidenceHint: 'Evidence ID, searchable in the audit log', evidence: 'Evidence', tools: 'Tool calls', readonly: 'Read-only',
+    evidenceHint: 'Evidence ID, searchable in the audit log', evidence: 'Evidence', tools: 'Tool calls', readonly: 'Read-only', readWrite: 'Can create guardrails',
     deleteTitle: 'Delete this session?', deleteHint: 'Session history will be permanently deleted. Audit events are not affected.',
     emptySessions: 'No previous sessions', poweredBy: 'Grounded in gateway audit data'
   },

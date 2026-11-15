@@ -87,7 +87,7 @@ docs/                    PRD 与设计文档
 | 审计导出    | 按时间范围流式导出 NDJSON                                                                                             |
 | 审计深度    | 事件详情、关联正文解密（需 `ContentRead`）、requestId 调用链、到期内容清理                                            |
 | 误报申诉    | 独立追加表记录，不回写审计行                                                                                          |
-| 审计助手    | MAF 1.28 `ChatClientAgent`；**8 个只读工具**、多轮会话持久化、SSE 流式输出；工具轮数有上限，每次工具调用写审计        |
+| 审计助手    | MAF 1.28 `ChatClientAgent`；**8 个只读工具 + 按 RBAC 注入的 `list_guardrails`/`create_guardrail`**、多轮会话持久化、SSE 流式输出；工具轮数有上限，每次工具调用写审计 |
 | 助手会话    | `AssistantSession` / `AssistantMessage` 落库，历史回放上限可配；会话只属本人，管理员不可读                            |
 | EF 迁移     | **两个 Provider 各一套迁移**（`Migrations/Sqlite`、`Migrations/Postgres`），同一 `DbContext` 基类 + Provider 绑定子类 |
 | 员工审计    | 员工流量（含 BYOK）**强制记录正文**，与全局 `content.persist` 解耦，不可配降级                                        |

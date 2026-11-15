@@ -135,7 +135,8 @@ public static class CustomRuleEndpoints
         await http.Response.WriteAsJsonAsync(new { ok = true, rules = store.Rules }, ct);
     }
 
-    private static CustomRule ToRule(UpsertCustomRuleRequest request) => new()
+    /// <summary>请求 → 规则的归一化（管理端端点与助手工具共用，避免两处口径漂移）。</summary>
+    public static CustomRule ToRule(UpsertCustomRuleRequest request) => new()
     {
         Key = request.Key?.Trim().ToLowerInvariant() ?? string.Empty,
         Pattern = request.Pattern?.Trim() ?? string.Empty,

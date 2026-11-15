@@ -67,7 +67,7 @@ public static class AssistantEndpoints
 
         var history = await LoadHistoryAsync(sessionStore, request.SessionId, session.UserId, options, ct);
 
-        var answer = await assistant.AskAsync(request.Question, request.Model, session.UserId, history, ct);
+        var answer = await assistant.AskAsync(request.Question, request.Model, session.UserId, session.Roles, history, ct);
 
         Guid? sessionId = request.SessionId;
         AssistantAnswer persisted = answer;
@@ -153,7 +153,7 @@ public static class AssistantEndpoints
         IReadOnlyList<string> evidence = [];
         string? toolNames = null;
 
-        await foreach (var evt in assistant.StreamAsync(request.Question, request.Model, session.UserId, history, ct))
+        await foreach (var evt in assistant.StreamAsync(request.Question, request.Model, session.UserId, session.Roles, history, ct))
         {
             if (evt.Kind == "delta" && evt.Text is not null)
             {
@@ -362,9 +362,18 @@ public static class AssistantEndpoints
         http.Response.StatusCode = StatusCodes.Status204NoContent;
     }
 
-    private static IResult ListTools() => Results.Ok(new
+    /// <summary>
+    /// 工具清单与 <see cref="AssistantToolbox.Build"/> 同源：按会话角色过滤，
+    /// 前端据此展示能力与「只读」标记。未登录返回 401。
+    /// </summary>
+    private static IResult ListTools(HttpContext http, SessionStore sessions)
     {
-        tools = new[]
+        if (!TryAuthorize(http, sessions, out var session))
+        {
+            return Results.Unauthorized();
+        }
+
+        var tools = new List<object>
         {
             new { name = "search_audit_events", readOnly = true },
             new { name = "get_usage_summary", readOnly = true },
@@ -374,8 +383,20 @@ public static class AssistantEndpoints
             new { name = "list_models", readOnly = true },
             new { name = "get_gateway_health", readOnly = true },
             new { name = "read_content", readOnly = true }
+        };
+
+        if (Rbac.AllowsAny(session.Roles, Permission.SecurityRead))
+        {
+            tools.Add(new { name = "list_guardrails", readOnly = true });
         }
-    });
+
+        if (Rbac.AllowsAny(session.Roles, Permission.SecurityWrite))
+        {
+            tools.Add(new { name = "create_guardrail", readOnly = false });
+        }
+
+        return Results.Ok(new { tools });
+    }
 
     private static bool TryAuthorize(HttpContext http, SessionStore sessions, out SessionEntry session)
     {

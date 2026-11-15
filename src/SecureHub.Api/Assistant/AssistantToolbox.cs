@@ -6,12 +6,15 @@ using SecureHub.Api.Services;
 using SecureHub.Core.Abstractions;
 using SecureHub.Core.Domain;
 using SecureHub.Core.Options;
+using SecureHub.Api.Endpoints;
+using SecureHub.Core.Security;
+using SecureHub.Core.Security.Guardrails;
 using SecureHub.Data;
 
 namespace SecureHub.Api.Assistant;
 
-/// <summary>一次助手问答内的工具调用状态：计数、证据、工具名轨迹。</summary>
-public sealed class AssistantToolSession(Guid userId, string model)
+/// <summary>一次助手问答内的工具调用状态：计数、证据、工具名轨迹；角色决定可见工具集。</summary>
+public sealed class AssistantToolSession(Guid userId, string model, IReadOnlyList<UserRole>? roles = null)
 {
     private readonly object _gate = new();
     private readonly List<string> _evidence = [];
@@ -20,6 +23,7 @@ public sealed class AssistantToolSession(Guid userId, string model)
 
     public Guid UserId { get; } = userId;
     public string Model { get; } = model;
+    public IReadOnlyList<UserRole> Roles { get; } = roles ?? [];
 
     public int CallCount => Volatile.Read(ref _calls);
 
@@ -57,66 +61,98 @@ public sealed class AssistantToolSession(Guid userId, string model)
 }
 
 /// <summary>
-/// 助手工具集（PRD §11.5）。全部只读；每次调用都写 <c>assistant_tool_invoked</c> 审计；
+/// 助手工具集（PRD §11.5）。只读为主，护栏创建两个工具按 RBAC 注入并二次鉴权；每次调用都写 <c>assistant_tool_invoked</c> 审计；
 /// 结果一律截断，避免一次追问把大量数据送进第三方模型。
 /// </summary>
 public sealed class AssistantToolbox(
     SecureHubDbContext db,
     ContentStore content,
+    CustomRuleStore customRules,
+    PolicyStore policyStore,
     AuditWriter audit,
     IClock clock,
     IOptions<SecureHubOptions> options)
 {
     private int MaxChars => Math.Clamp(options.Value.Assistant.MaxToolResultChars, 1_000, 40_000);
 
-    public IReadOnlyList<AITool> Build(AssistantToolSession session, CancellationToken ct) =>
-    [
-        AIFunctionFactory.Create(
-            (int days, string? eventType, int limit) =>
-                RunAsync("search_audit_events", session, ct, () => SearchAuditEventsAsync(days, eventType, limit, ct)),
-            "search_audit_events",
-            "按时间范围与事件类型检索审计事件，只返回元数据"),
+    public IReadOnlyList<AITool> Build(AssistantToolSession session, CancellationToken ct)
+    {
+        var tools = new List<AITool>
+        {
+            AIFunctionFactory.Create(
+                (int days, string? eventType, int limit) =>
+                    RunAsync("search_audit_events", session, ct, () => SearchAuditEventsAsync(days, eventType, limit, ct)),
+                "search_audit_events",
+                "按时间范围与事件类型检索审计事件，只返回元数据"),
 
-        AIFunctionFactory.Create(
-            (int days) =>
-                RunAsync("get_usage_summary", session, ct, () => GetUsageSummaryAsync(days, ct)),
-            "get_usage_summary",
-            "近 N 天的调用量、token 与成本汇总"),
+            AIFunctionFactory.Create(
+                (int days) =>
+                    RunAsync("get_usage_summary", session, ct, () => GetUsageSummaryAsync(days, ct)),
+                "get_usage_summary",
+                "近 N 天的调用量、token 与成本汇总"),
 
-        AIFunctionFactory.Create(
-            (int days, string? bucket) =>
-                RunAsync("get_cost_trend", session, ct, () => GetCostTrendAsync(days, bucket, ct)),
-            "get_cost_trend",
-            "按时间桶（day/week）返回成本与调用量趋势"),
+            AIFunctionFactory.Create(
+                (int days, string? bucket) =>
+                    RunAsync("get_cost_trend", session, ct, () => GetCostTrendAsync(days, bucket, ct)),
+                "get_cost_trend",
+                "按时间桶（day/week）返回成本与调用量趋势"),
 
-        AIFunctionFactory.Create(
-            (string requestId) =>
-                RunAsync("explain_request", session, ct, () => ExplainRequestAsync(requestId, ct)),
-            "explain_request",
-            "查看单个 requestId 的完整审计链路"),
+            AIFunctionFactory.Create(
+                (string requestId) =>
+                    RunAsync("explain_request", session, ct, () => ExplainRequestAsync(requestId, ct)),
+                "explain_request",
+                "查看单个 requestId 的完整审计链路"),
 
-        AIFunctionFactory.Create(
-            (string? query, string? providerKey, int limit) =>
-                RunAsync("search_model_catalog", session, ct, () => SearchModelCatalogAsync(query, providerKey, limit, ct)),
-            "search_model_catalog",
-            "在 models.dev 目录里搜索模型能力与价格"),
+            AIFunctionFactory.Create(
+                (string? query, string? providerKey, int limit) =>
+                    RunAsync("search_model_catalog", session, ct, () => SearchModelCatalogAsync(query, providerKey, limit, ct)),
+                "search_model_catalog",
+                "在 models.dev 目录里搜索模型能力与价格"),
 
-        AIFunctionFactory.Create(
-            () => RunAsync("list_models", session, ct, () => ListModelsAsync(ct)),
-            "list_models",
-            "列出当前可用的模型与其能力"),
+            AIFunctionFactory.Create(
+                () => RunAsync("list_models", session, ct, () => ListModelsAsync(ct)),
+                "list_models",
+                "列出当前可用的模型与其能力"),
 
-        AIFunctionFactory.Create(
-            () => RunAsync("get_gateway_health", session, ct, GetGatewayHealthAsync),
-            "get_gateway_health",
-            "供应商健康状态与近 24 小时的失败率"),
+            AIFunctionFactory.Create(
+                () => RunAsync("get_gateway_health", session, ct, GetGatewayHealthAsync),
+                "get_gateway_health",
+                "供应商健康状态与近 24 小时的失败率"),
 
-        AIFunctionFactory.Create(
-            (string requestId, string? direction, string? variant) =>
-                RunAsync("read_content", session, ct, () => ReadContentAsync(requestId, direction, variant, ct)),
-            "read_content",
-            "读取单个请求/响应的正文（默认关闭，需管理员开启）")
-    ];
+            AIFunctionFactory.Create(
+                (string requestId, string? direction, string? variant) =>
+                    RunAsync("read_content", session, ct, () => ReadContentAsync(requestId, direction, variant, ct)),
+                "read_content",
+                "读取单个请求/响应的正文（默认关闭，需管理员开启）")
+        };
+
+        // 护栏工具按 RBAC 注入：拿不到 SecurityRead 就看不到 list，拿不到 SecurityWrite 就没有 create。
+        if (Rbac.AllowsAny(session.Roles, Permission.SecurityRead))
+        {
+            tools.Add(AIFunctionFactory.Create(
+                () => RunAsync("list_guardrails", session, ct, () => ListGuardrailsAsync(ct)),
+                "list_guardrails",
+                "列出安全护栏：自定义敏感词规则与安全策略（含 detector id，供策略条件引用）"));
+        }
+
+        if (Rbac.AllowsAny(session.Roles, Permission.SecurityWrite))
+        {
+            tools.Add(AIFunctionFactory.Create(
+                (string? type, string? key, string? pattern, string? matchType, string? severity,
+                 string? direction, string? description, string? scopeApps, int? priority,
+                 string? action, string? detector, int? minMatches, string? reason) =>
+                    RunAsync("create_guardrail", session, ct,
+                        () => CreateGuardrailAsync(session, type, key, pattern, matchType, severity,
+                            direction, description, scopeApps, priority, action, detector,
+                            minMatches, reason, ct)),
+                "create_guardrail",
+                "创建安全护栏并立即生效，同时写审计。type=rule 建自定义敏感词规则（key、pattern、match_type=keyword|regex、severity=info|warning|critical、direction=inbound|outbound、description）；"
+                + "type=policy 建安全策略（key、scope_apps 逗号分隔、priority、action=block|redact|alert、detector、min_matches、reason）。"
+                + "policy 至少要有一个 scope 或一个 detector，detector 必须是已存在的 id（内置或 custom.{key}）。"));
+        }
+
+        return tools;
+    }
 
     private async Task<string> RunAsync(
         string toolName,
@@ -469,6 +505,163 @@ public sealed class AssistantToolbox(
             truncated = text.Length > limit,
             content = body
         }), [requestId]);
+    }
+
+    /// <summary>列出自定义规则与安全策略；证据留空——列表本身不是任何结论的依据。</summary>
+    private async Task<(string, IReadOnlyList<string>)> ListGuardrailsAsync(CancellationToken ct)
+    {
+        var policies = await db.SecurityPolicies.AsNoTracking()
+            .OrderBy(p => p.PolicyKey)
+            .Select(p => new { p.PolicyKey, p.Enabled, p.ActiveVersion, p.CreatedAt })
+            .ToListAsync(ct);
+
+        var payload = new
+        {
+            rules = customRules.Rules.Select(r => new
+            {
+                detector_id = r.DetectorId,
+                r.Key,
+                r.Pattern,
+                match_type = r.MatchType,
+                severity = r.Severity.ToString().ToLowerInvariant(),
+                direction = r.Direction.ToString().ToLowerInvariant(),
+                r.Enabled,
+                r.Description
+            }),
+            policies,
+            limits = new
+            {
+                max_rules = CustomRuleValidation.MaxRules,
+                max_pattern_length = CustomRuleValidation.MaxPatternLength
+            }
+        };
+
+        return (JsonSerializer.Serialize(payload), []);
+    }
+
+    private async Task<(string, IReadOnlyList<string>)> CreateGuardrailAsync(
+        AssistantToolSession session, string? type, string? key, string? pattern, string? matchType,
+        string? severity, string? direction, string? description, string? scopeApps, int? priority,
+        string? action, string? detector, int? minMatches, string? reason, CancellationToken ct)
+    {
+        // Build 已按角色注入，这里再挡一次：工具集随会话角色决定，不能只靠「看不见」。
+        if (!Rbac.AllowsAny(session.Roles, Permission.SecurityWrite))
+        {
+            return (JsonSerializer.Serialize(new { error = ReasonCodes.InsufficientScope }), []);
+        }
+
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "rule" => await CreateGuardRuleAsync(session, key, pattern, matchType, severity, direction, description, ct),
+            "policy" => await CreateGuardPolicyAsync(session, key, scopeApps, priority, action, detector, minMatches, reason, ct),
+            _ => (JsonSerializer.Serialize(new
+            {
+                error = "guardrail_type_invalid",
+                hint = "type 必须是 rule（自定义敏感词规则）或 policy（安全策略）"
+            }), Array.Empty<string>())
+        };
+    }
+
+    /// <summary>规则路径：与管理端 POST /api/admin/guardrails/rules 同一套校验与归一化。</summary>
+    private async Task<(string, IReadOnlyList<string>)> CreateGuardRuleAsync(
+        AssistantToolSession session, string? key, string? pattern, string? matchType,
+        string? severity, string? direction, string? description, CancellationToken ct)
+    {
+        if (customRules.Rules.Count >= CustomRuleValidation.MaxRules)
+        {
+            return (JsonSerializer.Serialize(new { error = "rule_limit_exceeded" }), []);
+        }
+
+        var rule = CustomRuleEndpoints.ToRule(new UpsertCustomRuleRequest(
+            Key: key,
+            Pattern: pattern,
+            MatchType: matchType,
+            IgnoreCase: null,
+            Severity: severity,
+            Direction: direction,
+            Enabled: true,
+            Sample: null,
+            Description: description));
+
+        if (CustomRuleValidation.Validate(rule, isDuplicateKey: customRules.Contains(rule.DetectorId)) is { } error)
+        {
+            return (JsonSerializer.Serialize(new { error }), []);
+        }
+
+        await customRules.SaveAsync([.. customRules.Rules, rule], session.UserId, ct);
+
+        await audit.AppendAsync(AuditEventTypes.CustomRuleCreated, "guardrail_rule", rule.Key,
+            "assistant", "ok", severity: AuditSeverity.Warning,
+            configure: e => e.Detail = JsonSerializer.Serialize(new
+            {
+                rule.Key,
+                rule.Pattern,
+                rule.MatchType,
+                rule.Severity,
+                rule.Direction,
+                rule.Enabled,
+                by = session.UserId,
+                source = "assistant"
+            }, CustomRuleJson.Options), ct: ct);
+
+        return (JsonSerializer.Serialize(new
+        {
+            ok = true,
+            detector_id = rule.DetectorId,
+            key = rule.Key
+        }), [rule.DetectorId]);
+    }
+
+    /// <summary>策略路径：与管理端 POST /api/admin/policies 同一套校验、落库与快照刷新。</summary>
+    private async Task<(string, IReadOnlyList<string>)> CreateGuardPolicyAsync(
+        AssistantToolSession session, string? key, string? scopeApps, int? priority,
+        string? action, string? detector, int? minMatches, string? reason, CancellationToken ct)
+    {
+        var apps = string.IsNullOrWhiteSpace(scopeApps)
+            ? null
+            : scopeApps.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var request = new PublishPolicyRequest(
+            key ?? string.Empty,
+            priority ?? 100,
+            apps is null ? null : new PolicyScopeDto(null, apps, null),
+            string.IsNullOrWhiteSpace(detector)
+                ? null
+                : new PolicyWhenDto([new PolicyDetectorDto(detector.Trim(), Math.Max(1, minMatches ?? 1))], []),
+            new PolicyThenDto(string.IsNullOrWhiteSpace(action) ? "block" : action.Trim().ToLowerInvariant(),
+                string.Empty, null),
+            OnError: null,
+            RolloutPercent: null,
+            ChangeReason: reason);
+
+        if (PolicyDraft.Validate(request, customRules) is { } error)
+        {
+            return (JsonSerializer.Serialize(new { error }), []);
+        }
+
+        var result = await PolicyDraft.PublishAsync(db, policyStore, request, session.UserId, clock, ct);
+
+        await audit.AppendAsync(
+            result.Created ? AuditEventTypes.PolicyCreated : AuditEventTypes.PolicyUpdated,
+            "user", session.UserId.ToString(), "assistant", "ok",
+            configure: e => e.Detail = JsonSerializer.Serialize(new
+            {
+                policy_key = result.PolicyKey,
+                version = result.Version,
+                action = result.Action,
+                priority = request.Priority,
+                source = "assistant"
+            }), ct: ct);
+
+        return (JsonSerializer.Serialize(new
+        {
+            ok = true,
+            policy_key = result.PolicyKey,
+            version = result.Version,
+            created = result.Created,
+            snapshot_reloaded = result.SnapshotReloaded,
+            error = result.StoreError
+        }), [result.PolicyKey]);
     }
 
     private int ClampDays(int days) => Math.Clamp(days <= 0 ? 7 : days, 1, 90);

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SecureHub.Api.Auth;
@@ -47,9 +46,6 @@ public sealed record PolicyTestRequest(
 public static class PolicyEndpoints
 {
     private const int MaxSampleLength = 4000;
-
-    private static readonly Regex PolicyKeyPattern =
-        new("^[a-z][a-z0-9-]{1,63}$", RegexOptions.Compiled);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -299,62 +295,25 @@ public static class PolicyEndpoints
 
         if (!await ValidateDraftAsync(http, request, localizer, customRules)) return;
 
-        var policy = await db.SecurityPolicies.FirstOrDefaultAsync(p => p.PolicyKey == request.PolicyKey, ct);
-        var created = policy is null;
-        if (policy is null)
-        {
-            policy = new SecurityPolicy
-            {
-                PolicyKey = request.PolicyKey,
-                Enabled = true,
-                CreatedAt = clock.UtcNow
-            };
-            db.SecurityPolicies.Add(policy);
-        }
-
-        var nextVersion = (await db.SecurityPolicyVersions
-            .Where(v => v.PolicyId == policy.Id)
-            .Select(v => (int?)v.Version)
-            .MaxAsync(ct) ?? 0) + 1;
-
-        var then = BuildThen(request);
-        db.SecurityPolicyVersions.Add(new SecurityPolicyVersion
-        {
-            PolicyId = policy.Id,
-            Version = nextVersion,
-            Priority = request.Priority,
-            ScopeJson = JsonSerializer.Serialize(BuildScope(request)),
-            WhenJson = JsonSerializer.Serialize(BuildCondition(request)),
-            ThenJson = JsonSerializer.Serialize(then),
-            OnError = string.Equals(request.OnError, "allow", StringComparison.OrdinalIgnoreCase) ? "allow" : "block",
-            RolloutJson = JsonSerializer.Serialize(new PolicyRollout { Percent = request.RolloutPercent ?? 100 }),
-            ChangeReason = request.ChangeReason?.Trim() ?? string.Empty,
-            CreatedBy = session.UserId,
-            CreatedAt = clock.UtcNow
-        });
-
-        policy.ActiveVersion = nextVersion;
-        await db.SaveChangesAsync(ct);
-
-        var refreshed = await store.RefreshAsync(ct);
+        var result = await PolicyDraft.PublishAsync(db, store, request, session.UserId, clock, ct);
 
         await audit.AppendAsync(
-            created ? AuditEventTypes.PolicyCreated : AuditEventTypes.PolicyUpdated,
+            result.Created ? AuditEventTypes.PolicyCreated : AuditEventTypes.PolicyUpdated,
             "user", session.UserId.ToString(), session.UserName, "ok",
             configure: e => e.Detail = JsonSerializer.Serialize(new
             {
-                policy_key = policy.PolicyKey,
-                version = nextVersion,
-                action = then.Action,
+                policy_key = result.PolicyKey,
+                version = result.Version,
+                action = result.Action,
                 priority = request.Priority
             }), ct: ct);
 
         await http.Response.WriteAsJsonAsync(new
         {
-            policy_key = policy.PolicyKey,
-            version = nextVersion,
-            snapshot_reloaded = refreshed,
-            error = store.LastError
+            policy_key = result.PolicyKey,
+            version = result.Version,
+            snapshot_reloaded = result.SnapshotReloaded,
+            error = result.StoreError
         }, ct);
     }
 
@@ -397,9 +356,9 @@ public static class PolicyEndpoints
             .GroupBy(d => d.DetectorId, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Sum(d => d.MatchCount), StringComparer.Ordinal);
 
-        var scope = BuildScope(request.Policy);
-        var condition = BuildCondition(request.Policy);
-        var then = BuildThen(request.Policy);
+        var scope = PolicyDraft.BuildScope(request.Policy);
+        var condition = PolicyDraft.BuildCondition(request.Policy);
+        var then = PolicyDraft.BuildThen(request.Policy);
 
         var draft = new CompiledPolicy(
             request.Policy.PolicyKey,
@@ -617,92 +576,11 @@ public static class PolicyEndpoints
         HttpContext http, PublishPolicyRequest request, ILocalizer localizer,
         CustomRuleStore customRules)
     {
-        if (!PolicyKeyPattern.IsMatch(request.PolicyKey ?? string.Empty))
-        {
-            await ApiError.Create(400, "validation.policy_key", localizer).ExecuteAsync(http);
-            return false;
-        }
+        var error = PolicyDraft.Validate(request, customRules);
+        if (error is null) return true;
 
-        if (request.Priority is < 0 or > 1000)
-        {
-            await ApiError.Create(400, "validation.policy_priority", localizer).ExecuteAsync(http);
-            return false;
-        }
-
-        var action = (request.Then?.Action ?? "block").Trim().ToLowerInvariant();
-        if (action is not ("block" or "redact" or "alert"))
-        {
-            await ApiError.Create(400, "validation.policy_action", localizer).ExecuteAsync(http);
-            return false;
-        }
-
-        var any = request.When?.Any ?? [];
-        var all = request.When?.All ?? [];
-        foreach (var requirement in any.Concat(all))
-        {
-            // 内置 id 或已存在的自定义规则 id（custom.{key}）均可引用。
-            var known = DetectorCatalog.Contains(requirement.Detector) ||
-                        customRules.Contains(requirement.Detector);
-            if (!known)
-            {
-                await ApiError.Create(400, "validation.detector_unknown", localizer).ExecuteAsync(http);
-                return false;
-            }
-
-            if (requirement.MinMatches is < 0 or > 100)
-            {
-                await ApiError.Create(400, "validation.invalid", localizer).ExecuteAsync(http);
-                return false;
-            }
-        }
-
-        var hasScope =
-            (request.Scope?.Teams?.Length ?? 0) > 0 ||
-            (request.Scope?.Apps?.Length ?? 0) > 0 ||
-            (request.Scope?.Models?.Length ?? 0) > 0;
-
-        if (!hasScope && any.Length == 0 && all.Length == 0)
-        {
-            await ApiError.Create(400, "validation.policy_condition_empty", localizer).ExecuteAsync(http);
-            return false;
-        }
-
-        return true;
-    }
-
-    private static PolicyScope BuildScope(PublishPolicyRequest request) => new()
-    {
-        Teams = request.Scope?.Teams ?? [],
-        Apps = request.Scope?.Apps ?? [],
-        Models = request.Scope?.Models ?? []
-    };
-
-    private static PolicyCondition BuildCondition(PublishPolicyRequest request) => new()
-    {
-        Any = (request.When?.Any ?? []).Select(d => new DetectorRequirement
-        {
-            Detector = d.Detector,
-            MinMatches = Math.Max(1, d.MinMatches)
-        }).ToArray(),
-        All = (request.When?.All ?? []).Select(d => new DetectorRequirement
-        {
-            Detector = d.Detector,
-            MinMatches = Math.Max(1, d.MinMatches)
-        }).ToArray()
-    };
-
-    private static PolicyThen BuildThen(PublishPolicyRequest request)
-    {
-        var action = (request.Then?.Action ?? "block").Trim().ToLowerInvariant();
-        var firstDetector = request.When?.Any?.FirstOrDefault()?.Detector
-            ?? request.When?.All?.FirstOrDefault()?.Detector;
-
-        return new PolicyThen
-        {
-            Action = action,
-            Reason = string.IsNullOrWhiteSpace(request.Then?.Reason) ? "policy_matched" : request.Then!.Reason,
-            RuleId = string.IsNullOrWhiteSpace(request.Then?.RuleId) ? firstDetector : request.Then!.RuleId
-        };
+        await ApiError.Create(400, error, localizer).ExecuteAsync(http);
+        return false;
     }
 
     private static T? Deserialize<T>(string? json) where T : class

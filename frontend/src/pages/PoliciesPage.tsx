@@ -52,6 +52,7 @@ import {
   type PolicyVersionRow,
   type PublishPolicyBody
 } from '../api';
+import { CustomRulesCard } from '../components/CustomRulesCard';
 import { PolicyEditorDialog } from '../components/PolicyEditorDialog';
 import { CodeBlock, ConfirmDialog, EmptyState, ErrorState, PageHeader, StatCard, StatusChip, TableSkeleton } from '../components/ui';
 import { useFormatters } from '../utils/format';
@@ -343,6 +344,16 @@ export default function PoliciesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 自定义规则增删后只刷新检测器目录，让 custom.{key} 立即可被策略引用。
+  const refreshDetectors = useCallback(async () => {
+    try {
+      const detectorRows = await api.policyDetectors();
+      setDetectors(detectorRows.length > 0 ? detectorRows : fallbackDetectors);
+    } catch {
+      // 刷新失败保留现有列表，不打断页面。
+    }
+  }, []);
 
   const enabledRows = rows.filter((row) => row.enabled);
   const actionCounts = useMemo(() => {
@@ -906,6 +917,8 @@ export default function PoliciesPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <CustomRulesCard onRulesChanged={() => void refreshDetectors()} />
 
       <Typography variant="caption" color="text.secondary">
         {t('policies.footnote', { detectors: detectors.length })}

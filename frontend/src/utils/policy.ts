@@ -45,6 +45,8 @@ export const fallbackDetectors: PolicyDetectorInfo[] = [
 const detectorKey = (id: string) => id.replace(/\./g, '_');
 
 export function detectorLabel(id: string, t: TFunction): string {
+  // 自定义规则没有本地化文案，展示规则 key（去掉 custom. 前缀）。
+  if (id.startsWith('custom.')) return id.slice('custom.'.length);
   return t(`policies.detector.${detectorKey(id)}.label`, { defaultValue: id });
 }
 

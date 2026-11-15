@@ -276,6 +276,22 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body)
     }),
+  customRules: () => request<CustomRuleList>('/api/admin/guardrails/rules'),
+  createCustomRule: (body: UpsertCustomRuleBody) =>
+    request<{ ok: boolean; rules: CustomRuleRow[] }>('/api/admin/guardrails/rules', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    }),
+  updateCustomRule: (key: string, body: Omit<UpsertCustomRuleBody, 'key'>) =>
+    request<{ ok: boolean; rules: CustomRuleRow[] }>(
+      `/api/admin/guardrails/rules/${encodeURIComponent(key)}`,
+      { method: 'PUT', body: JSON.stringify({ ...body, key }) }
+    ),
+  deleteCustomRule: (key: string) =>
+    request<{ ok: boolean; rules: CustomRuleRow[] }>(
+      `/api/admin/guardrails/rules/${encodeURIComponent(key)}`,
+      { method: 'DELETE' }
+    ),
   budgets: () => request<BudgetRow[]>('/api/admin/budgets'),
   upsertBudget: (body: UpsertBudgetBody) =>
     request<{ id: string }>('/api/admin/budgets', {
@@ -970,6 +986,44 @@ export interface PolicyTestResult {
   scope_matched: boolean;
   failed_closed: boolean;
   hits: Array<{ policy_key: string; action: string; reason: string }>;
+}
+
+/** 自定义敏感词规则（PRD §7.5）。后端枚举按数字序列化，请求侧用小写字符串。 */
+export interface CustomRuleRow {
+  key: string;
+  pattern: string;
+  matchType: string;
+  ignoreCase: boolean;
+  severity: number | string;
+  direction: number | string;
+  enabled: boolean;
+  sample?: string | null;
+  description?: string | null;
+}
+
+export interface CustomRuleList {
+  rules: CustomRuleRow[];
+  limits: { maxRules: number; maxPatternLength: number };
+}
+
+export interface UpsertCustomRuleBody {
+  key: string;
+  pattern: string;
+  matchType: 'keyword' | 'regex';
+  ignoreCase: boolean;
+  severity: 'info' | 'warning' | 'critical';
+  direction: 'inbound' | 'outbound';
+  enabled: boolean;
+  sample?: string;
+  description?: string;
+}
+
+export interface CustomRuleTestResult {
+  detector: string;
+  rule_id: string;
+  match_count: number;
+  field_path: string;
+  severity: string;
 }
 
 export interface BudgetRow {

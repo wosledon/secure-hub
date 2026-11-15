@@ -173,6 +173,9 @@ public static class AuditEventTypes
     public const string RateLimited = "rate_limited";
     public const string SystemSettingsUpdated = "system_settings_updated";
     public const string ContentPurged = "content_purged";
+    public const string CustomRuleCreated = "custom_rule_created";
+    public const string CustomRuleUpdated = "custom_rule_updated";
+    public const string CustomRuleDeleted = "custom_rule_deleted";
 }
 
 /// <summary>审计/错误原因码（机器可读，永不本地化）。</summary>

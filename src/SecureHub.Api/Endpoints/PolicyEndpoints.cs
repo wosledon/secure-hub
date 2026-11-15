@@ -72,11 +72,16 @@ public static class PolicyEndpoints
     }
 
     private static IResult Detectors(HttpContext http, SessionStore sessions,
+        CustomRuleStore customRules,
         IOptions<SecureHubOptions> options)
     {
         if (!Require(http, sessions, options.Value, Permission.SecurityRead)) return Results.Empty;
 
-        return Results.Ok(DetectorCatalog.All.Select(detector => new
+        // 内置检测器 + 管理员自定义规则，同一张目录供策略条件选择。
+        var descriptors = DetectorCatalog.All
+            .Concat(customRules.Rules.Select(rule => rule.ToDescriptor()));
+
+        return Results.Ok(descriptors.Select(detector => new
         {
             id = detector.Id,
             category = detector.Category,
@@ -285,13 +290,14 @@ public static class PolicyEndpoints
     private static async Task PublishAsync(
         HttpContext http, PublishPolicyRequest request, SessionStore sessions,
         SecureHubDbContext db, PolicyStore store, AuditWriter audit, IClock clock,
+        CustomRuleStore customRules,
         IOptions<SecureHubOptions> options, CancellationToken ct)
     {
         if (!Require(http, sessions, options.Value, Permission.SecurityWrite)) return;
         var localizer = ApiLocalization.For(http, options);
         var session = sessions.Get(SessionCookie.Read(http))!;
 
-        if (!await ValidateDraftAsync(http, request, localizer)) return;
+        if (!await ValidateDraftAsync(http, request, localizer, customRules)) return;
 
         var policy = await db.SecurityPolicies.FirstOrDefaultAsync(p => p.PolicyKey == request.PolicyKey, ct);
         var created = policy is null;
@@ -354,6 +360,7 @@ public static class PolicyEndpoints
 
     private static async Task TestAsync(
         HttpContext http, PolicyTestRequest request, SessionStore sessions,
+        CustomRuleStore customRules,
         IOptions<SecureHubOptions> options, CancellationToken ct)
     {
         if (!Require(http, sessions, options.Value, Permission.SecurityRead)) return;
@@ -365,7 +372,7 @@ public static class PolicyEndpoints
             return;
         }
 
-        if (!await ValidateDraftAsync(http, request.Policy, localizer)) return;
+        if (!await ValidateDraftAsync(http, request.Policy, localizer, customRules)) return;
 
         if (string.IsNullOrWhiteSpace(request.SampleText))
         {
@@ -379,7 +386,8 @@ public static class PolicyEndpoints
 
         // 试跑使用真实检测器，但给足预算，避免交互式测试被线上 8ms 预算干扰。
         var pipeline = new GuardrailPipeline(
-            [new PiiDetector(), new SecretDetector()],
+            [new PiiDetector(), new SecretDetector(),
+             new CustomRuleDetector(customRules.Compiled, GuardrailDirection.Inbound)],
             new GuardrailOptionsLike(2000, 1000, "block"));
 
         var verdict = await pipeline.RunAsync(
@@ -606,7 +614,8 @@ public static class PolicyEndpoints
     }
 
     private static async Task<bool> ValidateDraftAsync(
-        HttpContext http, PublishPolicyRequest request, ILocalizer localizer)
+        HttpContext http, PublishPolicyRequest request, ILocalizer localizer,
+        CustomRuleStore customRules)
     {
         if (!PolicyKeyPattern.IsMatch(request.PolicyKey ?? string.Empty))
         {
@@ -631,7 +640,10 @@ public static class PolicyEndpoints
         var all = request.When?.All ?? [];
         foreach (var requirement in any.Concat(all))
         {
-            if (!DetectorCatalog.Contains(requirement.Detector))
+            // 内置 id 或已存在的自定义规则 id（custom.{key}）均可引用。
+            var known = DetectorCatalog.Contains(requirement.Detector) ||
+                        customRules.Contains(requirement.Detector);
+            if (!known)
             {
                 await ApiError.Create(400, "validation.detector_unknown", localizer).ExecuteAsync(http);
                 return false;

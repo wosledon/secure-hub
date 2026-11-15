@@ -6,6 +6,7 @@ using SecureHub.Api.Endpoints;
 using SecureHub.Api.Services;
 using SecureHub.Core;
 using SecureHub.Core.Abstractions;
+using SecureHub.Core.Domain;
 using SecureHub.Core.Options;
 using SecureHub.Core.Security.Guardrails;
 using SecureHub.Data;
@@ -59,6 +60,7 @@ builder.Services.AddSingleton<PolicyStore>();
 builder.Services.AddScoped<BudgetGuard>();
 builder.Services.AddSingleton<KeyRateLimiter>();
 builder.Services.AddSingleton<SystemSettingStore>();
+builder.Services.AddSingleton<CustomRuleStore>();
 builder.Services.AddSingleton<CatalogSyncService>();builder.Services.AddHostedService(sp => sp.GetRequiredService<CatalogSyncService>());
 builder.Services.AddScoped<ContentStore>();
 builder.Services.AddScoped<RedactionTokenStore>();
@@ -70,8 +72,15 @@ builder.Services.AddScoped<GuardrailPipeline>(sp =>
 {
     var settings = sp.GetRequiredService<SystemSettingStore>();
     var onError = settings.GetString("guardrails.on_error", hubOptions.Guardrails.OnError);
+    // 自定义规则按方向各注入一个检测器实例；管道为 Scoped，每次请求取最新快照，保存后即刻生效。
+    var customRules = sp.GetRequiredService<CustomRuleStore>();
     return new GuardrailPipeline(
-        [new PiiDetector(), new SecretDetector()],
+        [
+            new PiiDetector(),
+            new SecretDetector(),
+            new CustomRuleDetector(customRules.Compiled, GuardrailDirection.Inbound),
+            new CustomRuleDetector(customRules.Compiled, GuardrailDirection.Outbound)
+        ],
         new GuardrailOptionsLike(
             hubOptions.Guardrails.TotalBudgetMs,
             hubOptions.Guardrails.PerDetectorBudgetMs,
@@ -92,6 +101,8 @@ if (hubOptions.Database.AutoMigrate)
 // 策略快照必须在开始服务前加载；失败只记录错误，不阻断启动（快照为空 = 无策略）。
 await app.Services.GetRequiredService<PolicyStore>().RefreshAsync();
 await app.Services.GetRequiredService<SystemSettingStore>().RefreshAsync();
+// 自定义敏感词规则与策略快照同样必须在开始服务前加载；失败只记录错误，不阻断启动。
+app.Services.GetRequiredService<CustomRuleStore>().Refresh();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -120,6 +131,7 @@ app.MapMetrics();
 app.MapPersonalOverview();
 app.MapSystem();
 app.MapRuntimeSettings();
+app.MapCustomRules();
 app.MapMcp();
 app.MapNativePassthrough();
 app.MapEmbeddings();
